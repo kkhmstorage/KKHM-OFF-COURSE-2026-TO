@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { Component, useEffect, useState, type ErrorInfo, type ReactNode } from 'react';
 import { Eye, EyeOff, KeyRound } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
 import { dataService } from './services/dataService';
@@ -328,10 +328,53 @@ const AppRouter: React.FC = () => {
   );
 };
 
+class AppErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; message: string }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false, message: '' };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, message: error?.message || 'Unexpected application error.' };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('KKHM AMS ErrorBoundary:', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+          <div className="max-w-md w-full rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+            <h1 className="text-base font-bold text-slate-900">
+              Unable to load KKHM Activity Management System
+            </h1>
+            <p className="mt-2 text-xs text-slate-600 leading-relaxed">{this.state.message}</p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-4 rounded-lg bg-[#1E3A5F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#162C49] cursor-pointer"
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   return (
-    <AppProvider>
-      <AppRouter />
-    </AppProvider>
+    <AppErrorBoundary>
+      <AppProvider>
+        <AppRouter />
+      </AppProvider>
+    </AppErrorBoundary>
   );
 }

@@ -2,7 +2,7 @@ name: Deploy KKHM AMS to GitHub Pages
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "master"]
   workflow_dispatch:
 
 permissions:
@@ -25,10 +25,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --legacy-peer-deps
 
       - name: Build production bundle
         env:
@@ -37,8 +36,10 @@ jobs:
           VITE_BASE_PATH: "./"
         run: npm run build
 
-      - name: Ensure SPA fallback for GitHub Pages
-        run: cp dist/index.html dist/404.html
+      - name: Prepare GitHub Pages static files
+        run: |
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

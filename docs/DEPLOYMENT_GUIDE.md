@@ -37,11 +37,12 @@ This guide explains how to connect the application to a free **Supabase PostgreS
    - Add two repository secrets:
      - `VITE_SUPABASE_URL` = your Supabase Project URL
      - `VITE_SUPABASE_ANON_KEY` = your Supabase `anon` public key
-4. Enable GitHub Pages:
+4. Enable GitHub Pages (**IMPORTANT**):
    - Open **Settings** -> **Pages**.
-   - Under **Build and deployment -> Source**, select **GitHub Actions**.
-5. The included workflow (`.github/workflows/deploy-pages.yml`) automatically builds and publishes the app to:
-   `https://<your-username>.github.io/kkhm-activity-manager/`
+   - Under **Build and deployment -> Source**, select **GitHub Actions** (do **NOT** choose *Deploy from a branch*, otherwise GitHub serves raw unbuilt `index.html` and shows a blank white page).
+5. The included workflow (`.github/workflows/deploy-pages.yml`) automatically installs dependencies, builds `dist/`, adds `.nojekyll` and `404.html`, and publishes the app to:
+   `https://<your-username>.github.io/<repo-name>/`
+   - You can verify deployment status under the repository's **Actions** tab (green checkmark = live).
 
 ---
 
