@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Edit3, Plus, Search, UserCheck, UserCog, UserX } from 'lucide-react';
+import { Edit3, Plus, Search, Trash2, UserCheck, UserCog, UserX } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { formatDisplayDate, getTodayIST } from '../../lib/dateUtils';
 import { dataService } from '../../services/dataService';
@@ -117,6 +117,25 @@ export const MentorsModule: React.FC = () => {
     }
   };
 
+  const handleDeleteMentor = (mentorId: string, mentorName: string, empCode: string) => {
+    confirmAction({
+      title: `Delete Mentor "${mentorName}"?`,
+      description: `Are you sure you want to permanently delete mentor "${mentorName}" (${empCode})? All student assignment links for this mentor will also be cleared. This action cannot be undone.`,
+      confirmLabel: 'Delete Mentor Permanently',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await dataService.deleteMentor(session.profile, mentorId);
+          if (editingId === mentorId) setModalOpen(false);
+          await refresh();
+          notify('success', `Mentor "${mentorName}" was deleted permanently.`);
+        } catch (err) {
+          notify('error', err instanceof Error ? err.message : 'Unable to delete mentor.');
+        }
+      },
+    });
+  };
+
   return (
     <div>
       <PageHeader
@@ -223,6 +242,20 @@ export const MentorsModule: React.FC = () => {
                           )}
                         </button>
                       )}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleDeleteMentor(
+                            item.mentor.id,
+                            item.profile?.full_name || 'Mentor',
+                            item.mentor.employee_code
+                          )
+                        }
+                        className="rounded-md border border-red-200 p-1.5 text-red-600 hover:bg-red-50 hover:text-red-700 cursor-pointer"
+                        title="Delete Mentor Permanently"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -332,21 +365,42 @@ export const MentorsModule: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setModalOpen(false)}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg bg-[#1E3A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#162C49] disabled:opacity-60 cursor-pointer"
-            >
-              {saving ? 'Saving...' : editingId ? 'Save Changes' : 'Create Mentor'}
-            </button>
+          <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-200">
+            {editingId ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const item = mentorsList.find((m) => m.mentor.id === editingId);
+                  if (item) {
+                    handleDeleteMentor(
+                      item.mentor.id,
+                      item.profile?.full_name || 'Mentor',
+                      item.mentor.employee_code
+                    );
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors cursor-pointer"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Delete Mentor
+              </button>
+            ) : <div />}
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-lg bg-[#1E3A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#162C49] disabled:opacity-60 cursor-pointer"
+              >
+                {saving ? 'Saving...' : editingId ? 'Save Changes' : 'Create Mentor'}
+              </button>
+            </div>
           </div>
         </form>
       </Modal>

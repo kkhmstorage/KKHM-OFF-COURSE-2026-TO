@@ -1066,6 +1066,52 @@ class DataService {
       full_name: prof.full_name,
       username: prof.username,
     });
+    this.saveSandbox();
+  }
+
+  public async deleteMentor(actor: Profile, mentorId: string): Promise<void> {
+    this.assertAdmin(actor);
+    if (isSupabaseConfigured()) {
+      const sb = getSupabaseClient()!;
+      const { data: mentor } = await sb
+        .from('mentors')
+        .select('id, profile_id, employee_code')
+        .eq('id', mentorId)
+        .maybeSingle();
+      if (!mentor) throw new Error('Mentor not found.');
+
+      await sb.from('mentor_assignments').delete().eq('mentor_id', mentorId);
+      const { error: mErr } = await sb.from('mentors').delete().eq('id', mentorId);
+      if (mErr) throw new Error(mErr.message);
+
+      if (mentor.profile_id) {
+        await sb.from('profiles').delete().eq('id', mentor.profile_id);
+      }
+      await this.logSupabaseAudit(actor, 'MENTOR_DELETED', 'mentor', mentorId, {
+        employee_code: mentor.employee_code,
+      });
+      return;
+    }
+
+    const db = this.getSandbox();
+    const mentor = db.mentors.find((m) => m.id === mentorId);
+    if (!mentor) throw new Error('Mentor not found.');
+    const prof = db.profiles.find((p) => p.id === mentor.profile_id);
+
+    db.mentors = db.mentors.filter((m) => m.id !== mentorId);
+    if (mentor.profile_id) {
+      db.profiles = db.profiles.filter((p) => p.id !== mentor.profile_id);
+      db.notifications = db.notifications.filter(
+        (n) => n.recipient_profile_id !== mentor.profile_id
+      );
+    }
+    db.mentor_assignments = db.mentor_assignments.filter((ma) => ma.mentor_id !== mentorId);
+
+    this.appendSandboxAudit(actor, 'MENTOR_DELETED', 'mentor', mentorId, {
+      full_name: prof?.full_name || 'Unknown',
+      employee_code: mentor.employee_code,
+    });
+    this.saveSandbox();
   }
 
   public async updateUserCredentials(
@@ -1247,6 +1293,30 @@ class DataService {
     if (sem) sem.status = status;
   }
 
+  public async deleteSemester(actor: Profile, semesterId: string): Promise<void> {
+    this.assertAdmin(actor);
+    if (isSupabaseConfigured()) {
+      const sb = getSupabaseClient()!;
+      await sb.from('semester_subjects').delete().eq('semester_id', semesterId);
+      await sb.from('student_subject_selections').delete().eq('semester_id', semesterId);
+      const { error } = await sb.from('semesters').delete().eq('id', semesterId);
+      if (error) throw new Error(error.message);
+      await this.logSupabaseAudit(actor, 'SEMESTER_DELETED', 'semester', semesterId, {});
+      return;
+    }
+
+    const db = this.getSandbox();
+    const sem = db.semesters.find((s) => s.id === semesterId);
+    if (!sem) throw new Error('Semester not found.');
+    db.semesters = db.semesters.filter((s) => s.id !== semesterId);
+    db.semester_subjects = db.semester_subjects.filter((ss) => ss.semester_id !== semesterId);
+    db.student_subject_selections = db.student_subject_selections.filter(
+      (sss) => sss.semester_id !== semesterId
+    );
+    this.appendSandboxAudit(actor, 'SEMESTER_DELETED', 'semester', sem.name, {});
+    this.saveSandbox();
+  }
+
   public async createSubject(
     actor: Profile,
     payload: Omit<Subject, 'id' | 'created_at'>
@@ -1270,6 +1340,30 @@ class DataService {
       created_at: new Date().toISOString(),
     });
     this.appendSandboxAudit(actor, 'SUBJECT_CREATED', 'subject', payload.code, payload);
+  }
+
+  public async deleteSubject(actor: Profile, subjectId: string): Promise<void> {
+    this.assertAdmin(actor);
+    if (isSupabaseConfigured()) {
+      const sb = getSupabaseClient()!;
+      await sb.from('semester_subjects').delete().eq('subject_id', subjectId);
+      await sb.from('student_subject_selections').delete().eq('subject_id', subjectId);
+      const { error } = await sb.from('subjects').delete().eq('id', subjectId);
+      if (error) throw new Error(error.message);
+      await this.logSupabaseAudit(actor, 'SUBJECT_DELETED', 'subject', subjectId, {});
+      return;
+    }
+
+    const db = this.getSandbox();
+    const sub = db.subjects.find((s) => s.id === subjectId);
+    if (!sub) throw new Error('Subject not found.');
+    db.subjects = db.subjects.filter((s) => s.id !== subjectId);
+    db.semester_subjects = db.semester_subjects.filter((ss) => ss.subject_id !== subjectId);
+    db.student_subject_selections = db.student_subject_selections.filter(
+      (sss) => sss.subject_id !== subjectId
+    );
+    this.appendSandboxAudit(actor, 'SUBJECT_DELETED', 'subject', sub.code, { name: sub.name });
+    this.saveSandbox();
   }
 
   public async toggleSemesterSubject(

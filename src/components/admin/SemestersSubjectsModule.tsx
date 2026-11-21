@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { BookOpen, CheckSquare, Plus, Square } from 'lucide-react';
+import { BookOpen, CheckSquare, Plus, Square, Trash2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { formatDisplayDate } from '../../lib/dateUtils';
 import { dataService } from '../../services/dataService';
-import type { SemesterStatus } from '../../types/domain';
+import type { SemesterStatus, Subject, Semester } from '../../types/domain';
 import { EmptyState, Modal, PageHeader, StatusLabel } from '../ui/CommonUI';
 
 export const SemestersSubjectsModule: React.FC = () => {
-  const { db, session, activeYear, refresh, notify } = useApp();
+  const { db, session, activeYear, refresh, notify, confirmAction } = useApp();
   const [tab, setTab] = useState<'semesters' | 'subjects' | 'mapping' | 'selections'>('semesters');
 
   // Semester form
@@ -122,6 +122,42 @@ export const SemestersSubjectsModule: React.FC = () => {
     }
   };
 
+  const handleDeleteSubject = (subject: Subject) => {
+    confirmAction({
+      title: `Delete Subject "${subject.name}"?`,
+      description: `Are you sure you want to permanently delete subject "${subject.name}" (${subject.code})? It will be removed from all semester offerings and student subject selections. This action cannot be undone.`,
+      confirmLabel: 'Delete Subject',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await dataService.deleteSubject(session.profile, subject.id);
+          await refresh();
+          notify('success', `Subject "${subject.name}" was deleted permanently.`);
+        } catch (err) {
+          notify('error', err instanceof Error ? err.message : 'Unable to delete subject.');
+        }
+      },
+    });
+  };
+
+  const handleDeleteSemester = (semester: Semester) => {
+    confirmAction({
+      title: `Delete Semester "${semester.name}"?`,
+      description: `Are you sure you want to delete semester "${semester.name}"? All subject mappings associated with this semester will be removed. This action cannot be undone.`,
+      confirmLabel: 'Delete Semester',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await dataService.deleteSemester(session.profile, semester.id);
+          await refresh();
+          notify('success', `Semester "${semester.name}" was deleted.`);
+        } catch (err) {
+          notify('error', err instanceof Error ? err.message : 'Unable to delete semester.');
+        }
+      },
+    });
+  };
+
   return (
     <div>
       <PageHeader
@@ -200,24 +236,34 @@ export const SemestersSubjectsModule: React.FC = () => {
                     <td className="px-4 py-3 text-right font-mono tabular-nums">{count}</td>
                     <td className="px-4 py-3"><StatusLabel status={sem.status} /></td>
                     <td className="px-4 py-3 text-right">
-                      <select
-                        disabled={activeYear.status === 'closed'}
-                        value={sem.status}
-                        onChange={async (e) => {
-                          await dataService.updateSemesterStatus(
-                            session.profile,
-                            sem.id,
-                            e.target.value as SemesterStatus
-                          );
-                          await refresh();
-                          notify('success', `Updated ${sem.name} status.`);
-                        }}
-                        className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
-                      >
-                        <option value="upcoming">Upcoming</option>
-                        <option value="active">Active</option>
-                        <option value="closed">Closed</option>
-                      </select>
+                      <div className="inline-flex items-center gap-1.5">
+                        <select
+                          disabled={activeYear.status === 'closed'}
+                          value={sem.status}
+                          onChange={async (e) => {
+                            await dataService.updateSemesterStatus(
+                              session.profile,
+                              sem.id,
+                              e.target.value as SemesterStatus
+                            );
+                            await refresh();
+                            notify('success', `Updated ${sem.name} status.`);
+                          }}
+                          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                        >
+                          <option value="upcoming">Upcoming</option>
+                          <option value="active">Active</option>
+                          <option value="closed">Closed</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSemester(sem)}
+                          className="rounded-md border border-red-200 p-1.5 text-red-600 hover:bg-red-50 hover:text-red-700 cursor-pointer"
+                          title={`Delete ${sem.name}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -244,6 +290,7 @@ export const SemestersSubjectsModule: React.FC = () => {
                 <th className="px-4 py-3 font-semibold">Subject Name</th>
                 <th className="px-4 py-3 font-semibold">Category</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
+                <th className="px-4 py-3 font-semibold text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -253,6 +300,16 @@ export const SemestersSubjectsModule: React.FC = () => {
                   <td className="px-4 py-3 font-medium text-slate-900">{sub.name}</td>
                   <td className="px-4 py-3 text-slate-600">{sub.category}</td>
                   <td className="px-4 py-3"><StatusLabel status={sub.is_active ? 'active' : 'inactive'} /></td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSubject(sub)}
+                      className="rounded-md border border-red-200 p-1.5 text-red-600 hover:bg-red-50 hover:text-red-700 cursor-pointer"
+                      title={`Delete ${sub.name}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
