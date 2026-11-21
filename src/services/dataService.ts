@@ -228,6 +228,26 @@ class DataService {
             const token = data.session_token as string;
             const profile = data.profile as Profile;
             setSupabaseSessionToken(token);
+
+            // Sync authenticated profile info into local sandbox cache for fallback consistency
+            try {
+              const sandbox = this.getSandbox();
+              const matchingSandboxProf = sandbox.profiles.find(
+                (p) =>
+                  p.username.toLowerCase() === profile.username.toLowerCase() ||
+                  (p.role === profile.role && profile.role === 'admin')
+              );
+              if (matchingSandboxProf) {
+                matchingSandboxProf.id = profile.id;
+                matchingSandboxProf.username = profile.username;
+                matchingSandboxProf.email = profile.email;
+                matchingSandboxProf.full_name = profile.full_name;
+                this.saveSandbox();
+              }
+            } catch {
+              // Ignore local cache sync errors
+            }
+
             const authedClient = getSupabaseClient()!;
             const [{ data: student }, { data: mentor }] = await Promise.all([
               authedClient.from('students').select('*').eq('profile_id', profile.id).maybeSingle(),

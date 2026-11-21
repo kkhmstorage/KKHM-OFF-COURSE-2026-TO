@@ -78,18 +78,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Keep session profile synced with latest DB state
       setSession((curr) => {
         if (!curr) return null;
-        const freshProfile = snap.profiles.find((p) => p.id === curr.profile.id);
-        if (!freshProfile || !freshProfile.is_active) {
-          return null;
+        const freshProfile = snap.profiles.find(
+          (p) =>
+            p.id === curr.profile.id ||
+            p.username.toLowerCase() === curr.profile.username.toLowerCase() ||
+            p.email.toLowerCase() === curr.profile.email.toLowerCase()
+        );
+        if (freshProfile) {
+          if (!freshProfile.is_active) {
+            return null; // Explicitly deactivated account
+          }
+          const freshStudent = snap.students.find(
+            (s) => s.profile_id === freshProfile.id || s.profile_id === curr.profile.id
+          );
+          const freshMentor = snap.mentors.find(
+            (m) => m.profile_id === freshProfile.id || m.profile_id === curr.profile.id
+          );
+          return {
+            ...curr,
+            profile: {
+              ...freshProfile,
+              id: curr.profile.id || freshProfile.id,
+            },
+            student: freshStudent || curr.student,
+            mentor: freshMentor || curr.mentor,
+          };
         }
-        const freshStudent = snap.students.find((s) => s.profile_id === freshProfile.id);
-        const freshMentor = snap.mentors.find((m) => m.profile_id === freshProfile.id);
-        return {
-          ...curr,
-          profile: freshProfile,
-          student: freshStudent,
-          mentor: freshMentor,
-        };
+        // If profile is temporarily absent in this snapshot, DO NOT log the user out
+        return curr;
       });
     } catch (err) {
       notify('error', err instanceof Error ? err.message : 'Failed to load institutional records.');
