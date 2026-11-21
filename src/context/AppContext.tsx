@@ -181,13 +181,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!db) return undefined;
     return (
       db.academic_years.find((y) => y.id === db.app_settings.selected_academic_year_id) ||
+      db.academic_years.find((y) => y.status === 'open') ||
       db.academic_years[0]
     );
   }, [db]);
 
   const activeYearSettings = useMemo(() => {
     if (!db || !activeYear) return undefined;
-    return db.academic_year_settings.find((s) => s.academic_year_id === activeYear.id);
+    return (
+      db.academic_year_settings.find((s) => s.academic_year_id === activeYear.id) ||
+      db.academic_year_settings[0] || {
+        id: `ays-${activeYear.id}`,
+        academic_year_id: activeYear.id,
+        term_structure: 'semester' as const,
+        periods_per_day: 8,
+        weekly_working_days: 6,
+        is_friday_half_day: true,
+        friday_period_count: 4,
+        allow_holiday_reporting: false,
+        allow_future_date_reporting: false,
+        backdated_submission_limit_days: 7,
+        reminder_time: '17:00',
+        period_timings: [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+    );
   }, [db, activeYear]);
 
   const confirmAction = useCallback((cfg: ConfirmState) => {

@@ -1,8 +1,12 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-const SUPABASE_URL = metaEnv?.VITE_SUPABASE_URL?.trim() || '';
-const SUPABASE_ANON_KEY = metaEnv?.VITE_SUPABASE_ANON_KEY?.trim() || '';
+const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> })?.env;
+const rawUrl = metaEnv?.VITE_SUPABASE_URL?.trim() || '';
+const rawKey = metaEnv?.VITE_SUPABASE_ANON_KEY?.trim() || '';
+
+// Normalize URL: remove any accidental trailing slashes or /rest/v1 appended by user
+export const SUPABASE_URL = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+export const SUPABASE_ANON_KEY = rawKey;
 
 export const isSupabaseConfigured = (): boolean => {
   return Boolean(

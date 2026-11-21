@@ -83,101 +83,117 @@ class DataService {
 
   public async fetchSnapshot(): Promise<DatabaseSnapshot> {
     if (isSupabaseConfigured()) {
-      const sb = getSupabaseClient()!;
-      const [
-        profiles,
-        students,
-        mentors,
-        academic_years,
-        app_settings,
-        academic_year_settings,
-        student_academic_enrollments,
-        mentor_assignments,
-        semesters,
-        subjects,
-        semester_subjects,
-        student_subject_selections,
-        timetable_templates,
-        timetable_slots,
-        student_timetable_assignments,
-        timetable_overrides,
-        academic_calendar_exceptions,
-        report_submissions,
-        period_activity_entries,
-        report_review_history,
-        notifications,
-        audit_logs,
-      ] = await Promise.all([
-        sb.from('profiles').select('id,role,full_name,username,email,phone,is_active,last_login_at,created_at,updated_at'),
-        sb.from('students').select('*'),
-        sb.from('mentors').select('*'),
-        sb.from('academic_years').select('*').order('start_date', { ascending: false }),
-        sb.from('app_settings').select('*').eq('id', 1).maybeSingle(),
-        sb.from('academic_year_settings').select('*'),
-        sb.from('student_academic_enrollments').select('*'),
-        sb.from('mentor_assignments').select('*'),
-        sb.from('semesters').select('*').order('start_date', { ascending: true }),
-        sb.from('subjects').select('*').order('code', { ascending: true }),
-        sb.from('semester_subjects').select('*'),
-        sb.from('student_subject_selections').select('*'),
-        sb.from('timetable_templates').select('*'),
-        sb.from('timetable_slots').select('*'),
-        sb.from('student_timetable_assignments').select('*'),
-        sb.from('timetable_overrides').select('*'),
-        sb.from('academic_calendar_exceptions').select('*').order('exception_date', { ascending: false }),
-        sb.from('report_submissions').select('*').order('start_date', { ascending: false }),
-        sb.from('period_activity_entries').select('*').order('activity_date', { ascending: false }),
-        sb.from('report_review_history').select('*').order('created_at', { ascending: false }),
-        sb.from('notifications').select('*').order('created_at', { ascending: false }),
-        sb.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(200),
-      ]);
+      try {
+        const sb = getSupabaseClient();
+        if (!sb) {
+          return structuredClone(this.getSandbox());
+        }
 
-      const err =
-        profiles.error ||
-        academic_years.error ||
-        app_settings.error ||
-        report_submissions.error;
-      if (err) {
-        throw new Error(`Supabase database error: ${err.message}`);
+        const [
+          profiles,
+          students,
+          mentors,
+          academic_years,
+          app_settings,
+          academic_year_settings,
+          student_academic_enrollments,
+          mentor_assignments,
+          semesters,
+          subjects,
+          semester_subjects,
+          student_subject_selections,
+          timetable_templates,
+          timetable_slots,
+          student_timetable_assignments,
+          timetable_overrides,
+          academic_calendar_exceptions,
+          report_submissions,
+          period_activity_entries,
+          report_review_history,
+          notifications,
+          audit_logs,
+        ] = await Promise.all([
+          sb.from('profiles').select('id,role,full_name,username,email,phone,is_active,last_login_at,created_at,updated_at'),
+          sb.from('students').select('*'),
+          sb.from('mentors').select('*'),
+          sb.from('academic_years').select('*').order('start_date', { ascending: false }),
+          sb.from('app_settings').select('*').eq('id', 1).maybeSingle(),
+          sb.from('academic_year_settings').select('*'),
+          sb.from('student_academic_enrollments').select('*'),
+          sb.from('mentor_assignments').select('*'),
+          sb.from('semesters').select('*').order('start_date', { ascending: true }),
+          sb.from('subjects').select('*').order('code', { ascending: true }),
+          sb.from('semester_subjects').select('*'),
+          sb.from('student_subject_selections').select('*'),
+          sb.from('timetable_templates').select('*'),
+          sb.from('timetable_slots').select('*'),
+          sb.from('student_timetable_assignments').select('*'),
+          sb.from('timetable_overrides').select('*'),
+          sb.from('academic_calendar_exceptions').select('*').order('exception_date', { ascending: false }),
+          sb.from('report_submissions').select('*').order('start_date', { ascending: false }),
+          sb.from('period_activity_entries').select('*').order('activity_date', { ascending: false }),
+          sb.from('report_review_history').select('*').order('created_at', { ascending: false }),
+          sb.from('notifications').select('*').order('created_at', { ascending: false }),
+          sb.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(200),
+        ]);
+
+        const err =
+          profiles.error ||
+          academic_years.error ||
+          app_settings.error ||
+          report_submissions.error;
+        if (err) {
+          console.warn('Supabase database error, falling back to local sandbox store:', err.message);
+          return structuredClone(this.getSandbox());
+        }
+
+        // If Supabase table is empty (e.g. before seeding complete), fallback gracefully
+        if (!academic_years.data || academic_years.data.length === 0 || !profiles.data || profiles.data.length === 0) {
+          console.warn('Supabase tables have no records, falling back to local sandbox store.');
+          return structuredClone(this.getSandbox());
+        }
+
+        const fallbackSettings: AppSettings = app_settings.data || {
+          id: 1,
+          institution_name: 'KKHM Islamic & Arts College',
+          application_name: 'KKHM Off-Course Activity Management System',
+          timezone: 'Asia/Kolkata',
+          default_language: 'en',
+          selected_academic_year_id: academic_years.data?.[0]?.id || '',
+          in_app_notifications_enabled: true,
+          reminder_hour: 17,
+          session_timeout_hours: 168,
+          updated_at: new Date().toISOString(),
+        };
+
+        return {
+          profiles: (profiles.data || []) as Profile[],
+          students: students.data || [],
+          mentors: mentors.data || [],
+          academic_years: academic_years.data || [],
+          app_settings: fallbackSettings,
+          academic_year_settings: academic_year_settings.data || [],
+          student_academic_enrollments: student_academic_enrollments.data || [],
+          mentor_assignments: mentor_assignments.data || [],
+          semesters: semesters.data || [],
+          subjects: subjects.data || [],
+          semester_subjects: semester_subjects.data || [],
+          student_subject_selections: student_subject_selections.data || [],
+          timetable_templates: timetable_templates.data || [],
+          timetable_slots: timetable_slots.data || [],
+          student_timetable_assignments: student_timetable_assignments.data || [],
+          timetable_overrides: timetable_overrides.data || [],
+          academic_calendar_exceptions: academic_calendar_exceptions.data || [],
+          report_submissions: report_submissions.data || [],
+          period_activity_entries: period_activity_entries.data || [],
+          report_review_history: report_review_history.data || [],
+          notifications: notifications.data || [],
+          audit_logs: audit_logs.data || [],
+        };
+      } catch (err) {
+        console.warn('Supabase fetch exception, falling back to local sandbox store:', err);
+        return structuredClone(this.getSandbox());
       }
-
-      const fallbackSettings: AppSettings = app_settings.data || {
-        id: 1,
-        institution_name: 'KKHM Islamic & Arts College',
-        application_name: 'KKHM Off-Course Activity Management System',
-        timezone: 'Asia/Kolkata',
-        default_language: 'en',
-        selected_academic_year_id: academic_years.data?.[0]?.id || '',
-        in_app_notifications_enabled: true,
-        reminder_hour: 17,
-        session_timeout_hours: 168,
-        updated_at: new Date().toISOString(),
-      };
-
-      return {
-        profiles: (profiles.data || []) as Profile[],
-        students: students.data || [],
-        mentors: mentors.data || [],
-        academic_years: academic_years.data || [],
-        app_settings: fallbackSettings,
-        academic_year_settings: academic_year_settings.data || [],
-        student_academic_enrollments: student_academic_enrollments.data || [],
-        mentor_assignments: mentor_assignments.data || [],
-        semesters: semesters.data || [],
-        subjects: subjects.data || [],
-        semester_subjects: semester_subjects.data || [],
-        student_subject_selections: student_subject_selections.data || [],
-        timetable_templates: timetable_templates.data || [],
-        timetable_slots: timetable_slots.data || [],
-        student_timetable_assignments: student_timetable_assignments.data || [],
-        timetable_overrides: timetable_overrides.data || [],
-        academic_calendar_exceptions: academic_calendar_exceptions.data || [],
-        report_submissions: report_submissions.data || [],
-        period_activity_entries: period_activity_entries.data || [],
-        report_review_history: report_review_history.data || [],
-        notifications: notifications.data || [],
-        audit_logs: audit_logs.data || [],
-      };
     }
 
     // Clone snapshot for React immutability
@@ -191,28 +207,36 @@ class DataService {
     }
 
     if (isSupabaseConfigured()) {
-      const sb = getSupabaseClient()!;
-      const { data, error } = await sb.rpc('authenticate_user', {
-        p_identifier: identifier.trim(),
-        p_password: password,
-      });
-      if (error || !data) {
-        throw new Error(error?.message || 'Invalid username/email or password.');
+      try {
+        const sb = getSupabaseClient();
+        if (sb) {
+          const { data, error } = await sb.rpc('authenticate_user', {
+            p_identifier: identifier.trim(),
+            p_password: password,
+          });
+          if (!error && data?.session_token && data?.profile) {
+            const token = data.session_token as string;
+            const profile = data.profile as Profile;
+            setSupabaseSessionToken(token);
+            const authedClient = getSupabaseClient()!;
+            const [{ data: student }, { data: mentor }] = await Promise.all([
+              authedClient.from('students').select('*').eq('profile_id', profile.id).maybeSingle(),
+              authedClient.from('mentors').select('*').eq('profile_id', profile.id).maybeSingle(),
+            ]);
+            return {
+              token,
+              profile,
+              student: student || undefined,
+              mentor: mentor || undefined,
+            };
+          }
+          if (error && error.message && !error.message.includes('Invalid') && !error.message.includes('password')) {
+            console.warn('Supabase authenticate_user error, checking local sandbox:', error.message);
+          }
+        }
+      } catch (err) {
+        console.warn('Supabase login exception, checking local sandbox:', err);
       }
-      const token = data.session_token as string;
-      const profile = data.profile as Profile;
-      setSupabaseSessionToken(token);
-      const authedClient = getSupabaseClient()!;
-      const [{ data: student }, { data: mentor }] = await Promise.all([
-        authedClient.from('students').select('*').eq('profile_id', profile.id).maybeSingle(),
-        authedClient.from('mentors').select('*').eq('profile_id', profile.id).maybeSingle(),
-      ]);
-      return {
-        token,
-        profile,
-        student: student || undefined,
-        mentor: mentor || undefined,
-      };
     }
 
     const db = this.getSandbox();

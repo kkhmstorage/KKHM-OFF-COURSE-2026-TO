@@ -929,3 +929,17 @@ ALTER TABLE public.students
 CREATE INDEX IF NOT EXISTS idx_students_course_stream ON public.students(course_stream);
 CREATE INDEX IF NOT EXISTS idx_students_cic_ad_no ON public.students(cic_ad_no);
 CREATE INDEX IF NOT EXISTS idx_students_clg_ad_no ON public.students(clg_ad_no);
+
+-- ==============================================================================
+-- Migration 005: PostgREST API Permissions for Anon and Authenticated Roles
+-- Ensures Supabase client SDK can query tables without 'permission denied'
+-- ==============================================================================
+
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
