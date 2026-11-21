@@ -1,0 +1,32 @@
+{
+  "id": "./",
+  "name": "KKHM Off-Course Activity Management System",
+  "short_name": "KKHM AMS",
+  "description": "Academic off-course activity management, weekly timetable, period-wise student reporting, and mentor verification platform for KKHM Islamic & Arts College.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#1E3A5F",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "./pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

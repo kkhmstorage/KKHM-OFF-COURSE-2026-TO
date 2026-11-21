@@ -1,0 +1,1690 @@
+# MASTER DEVELOPMENT PROMPT
+# KKHM ISLAMIC & ARTS COLLEGE
+# OFF-COURSE ACTIVITY MANAGEMENT SYSTEM
+
+## PROJECT INSTRUCTION
+
+Act as a senior software architect, professional full-stack development team, UI/UX designer, database architect, and application security engineer.
+
+Your task is to design and develop a complete, production-oriented, professional web application for KKHM Islamic & Arts College.
+
+The application must manage, monitor, record, review, and analyze students' off-course activities throughout each academic year.
+
+This is not a simple dashboard or a static UI prototype.
+
+I need a complete and genuinely functional software application with:
+
+- Professional UI/UX.
+- Three role-based login systems.
+- Real database integration.
+- Complete CRUD operations.
+- Academic year management.
+- Student and mentor management.
+- Weekly timetable management.
+- Period-wise activity reporting.
+- Individual mentor approval.
+- Daily and weekly workflow configurations.
+- Previous academic year history.
+- Subject selection history.
+- Advanced administrative reports.
+- Database-level access security.
+- Mobile-responsive design.
+
+All buttons, forms, filters, tables, navigation items, settings, reports, and actions must work.
+
+Do not create decorative buttons or non-functional placeholder pages.
+
+Do not stop after creating the dashboard UI.
+
+Build the actual application, connect the frontend to the backend, implement the database, and make every core workflow functional.
+
+---
+
+# 1. PROJECT IDENTITY
+
+Application Name:
+
+KKHM Off-Course Activity Management System
+
+Institution:
+
+KKHM Islamic & Arts College
+
+Application Type:
+
+Academic Activity Management & Monitoring Platform.
+
+Primary Users:
+
+1. Admin
+2. Mentor
+3. Student
+
+Platform:
+
+Responsive Web Application / Progressive Web Application (PWA).
+
+Primary UI Language:
+
+English, with proper Malayalam language and text-entry support.
+
+Timezone:
+
+Asia/Kolkata (Indian Standard Time).
+
+Default academic schedule:
+
+- 6 working days per week.
+- 8 periods per working day.
+
+Important:
+
+Working days and periods must be configurable by the administrator. Never hardcode them throughout the application.
+
+The application should be simple to operate but professionally designed.
+
+---
+
+# 2. RECOMMENDED TECHNOLOGY STACK
+
+Use a modern, maintainable full-stack architecture.
+
+Frontend:
+- React.
+- TypeScript.
+- Tailwind CSS.
+- Reusable UI components.
+- Lucide icons.
+- Responsive layouts.
+
+UI Components:
+- Use a professional component system such as shadcn/ui where appropriate.
+- Use clean tables, cards, modals, dialogs, dropdowns, forms and charts.
+- Use Recharts or an equivalent chart library for analytics.
+
+Backend:
+- Supabase.
+
+Database:
+- PostgreSQL.
+
+Authentication:
+- Supabase Authentication.
+
+Database Security:
+- Supabase Row Level Security (RLS).
+
+File Storage:
+- Supabase Storage, only when required.
+
+Hosting:
+- Use a deployment-compatible cloud architecture.
+
+Use the available Google AI Studio development environment appropriately. Do not introduce unnecessary technologies.
+
+IMPORTANT DATABASE INSTRUCTION:
+
+The application must use a proper relational database.
+
+Do not use localStorage, sessionStorage, or hardcoded JavaScript arrays as the permanent database.
+
+Do not simulate a working database with fake frontend data.
+
+Temporary local state may be used for form interaction, but all persistent application records must be stored in the real backend database.
+
+If Supabase credentials are not yet available:
+
+1. Build the complete Supabase integration layer.
+2. Create all required SQL migrations.
+3. Generate an .env.example file.
+4. Provide clear Supabase setup instructions.
+5. Never pretend that database operations are successfully connected when they are not.
+6. Keep demo data isolated from production data.
+
+Never expose the Supabase service-role secret in frontend code.
+
+---
+
+# 3. DESIGN DIRECTION – PROFESSIONAL SOFTWARE QUALITY
+
+Design the application as a high-quality commercial education management product.
+
+The visual quality should be comparable to professionally developed SaaS dashboards.
+
+## 3.1 Design Style
+
+Use:
+
+- Clean and modern dashboard layouts.
+- Professional typography.
+- Consistent spacing.
+- Minimal visual clutter.
+- Well-designed cards.
+- Subtle shadows.
+- Proper border radius.
+- Consistent iconography.
+- High-quality data tables.
+- Clean charts.
+- Good visual hierarchy.
+- Accessible colour contrast.
+
+Suggested design direction:
+
+- Primary colour: Deep navy / professional blue.
+- Secondary colour: Teal.
+- Background: Light neutral grey.
+- Cards: White.
+- Text: Dark slate.
+- Success: Green.
+- Pending: Amber.
+- Error / Returned: Red.
+
+Do not use excessive gradients, unnecessary animations, oversized cards, or decorative graphics.
+
+The design must look professional, refined, modern, and suitable for an educational institution.
+
+## 3.2 Layout
+
+Desktop:
+
+- Collapsible left sidebar.
+- Top navigation bar.
+- Academic-year selector.
+- Notification icon.
+- User profile menu.
+- Main dashboard content.
+
+Mobile:
+
+- Fully responsive interface.
+- Mobile navigation drawer or bottom navigation where appropriate.
+- Easy-to-use touch controls.
+- Forms that fit mobile screens.
+- Tables that adapt to smaller screens.
+
+Student reporting screens must be especially mobile-friendly.
+
+## 3.3 UX Requirements
+
+Provide:
+
+- Loading indicators.
+- Empty states.
+- Error messages.
+- Success notifications.
+- Confirmation dialogs for destructive actions.
+- Form validation messages.
+- Searchable tables.
+- Pagination.
+- Sorting.
+- Filter controls.
+- Consistent navigation.
+- Breadcrumbs where appropriate.
+
+All forms must preserve user-entered information when validation fails.
+
+Use proper Malayalam font support and ensure Malayalam text is displayed correctly.
+
+---
+
+# 4. APPLICATION ROLES AND AUTHENTICATION
+
+Build a single application with three different role-based dashboards.
+
+## 4.1 Login Page
+
+Create a professional login screen with:
+
+- College logo placeholder.
+- Institution name.
+- Application name.
+- Email / Username field.
+- Password field.
+- Show / hide password.
+- Remember session option if appropriate.
+- Forgot password.
+- Login button.
+
+After successful authentication, identify the user's role and redirect to the correct dashboard.
+
+Admin → Admin Dashboard.
+
+Mentor → Mentor Dashboard.
+
+Student → Student Dashboard.
+
+Public self-registration must be disabled.
+
+User accounts will be created or managed by the administrator.
+
+## 4.2 Admin Role
+
+Admin has complete administrative access.
+
+Admin can:
+
+- Manage academic years.
+- Manage students.
+- Manage mentors.
+- Assign mentors to students.
+- Manage semesters.
+- Manage subjects.
+- Configure subject selections.
+- Create and assign timetables.
+- Manage academic calendar exceptions.
+- Configure system settings.
+- View all activity reports.
+- View all analytics.
+- Access audit history.
+
+## 4.3 Mentor Role
+
+Mentor can access only students assigned to that mentor for the relevant academic year.
+
+Mentor can:
+
+- View assigned students.
+- View students' timetables.
+- View daily reports.
+- View weekly reports.
+- View period-wise activities.
+- Approve individual periods.
+- Return periods for correction.
+- Add review comments.
+- View previously approved reports.
+- View assigned students' progress.
+
+Mentors must not be allowed to access unrelated students.
+
+## 4.4 Student Role
+
+Student can:
+
+- View the assigned timetable.
+- Record activities for each period.
+- Submit reports.
+- View approval status.
+- Edit returned reports.
+- View correction comments.
+- View previous academic years.
+- View semester-wise subject history.
+- View previous activity reports.
+
+Students must not be able to edit approved reports or change mentor approval statuses.
+
+---
+
+# 5. ACADEMIC YEAR MANAGEMENT – CRITICAL MODULE
+
+Implement a complete Academic Year Management module.
+
+## 5.1 Academic Year Creation
+
+Admin can create academic years.
+
+Fields:
+
+- Academic Year Name.
+- Start Date.
+- End Date.
+- Status.
+- Description (optional).
+
+Example:
+
+2024–25
+2025–26
+2026–27
+
+## 5.2 Global Academic Year Selector
+
+Show a prominent academic-year dropdown in the Admin Dashboard header.
+
+The selected academic year must determine the institutional data context throughout all dashboards.
+
+Example:
+
+Selected Academic Year: 2026–27.
+
+When the admin switches to 2025–26:
+
+- Admin sees 2025–26 records.
+- Mentor sees the corresponding assigned students and reports.
+- Student sees the appropriate academic-year context.
+- Historical records remain unchanged.
+
+Use a central database setting for the institution-wide selected academic year.
+
+Do not rely on individual browser state for the global academic-year selection.
+
+## 5.3 Academic Year Status
+
+Support:
+
+- Open.
+- Closed.
+
+Only an authorized administrator can close or reopen an academic year.
+
+A closed academic year:
+
+- Must be available for historical viewing.
+- Must not accept new reports.
+- Must not allow ordinary report modifications.
+- Must retain all student, mentor, timetable, subject, and report history.
+
+When the selected year has no enrollment or mentor assignment for a user, display a clear informative message rather than showing unrelated records.
+
+## 5.4 Year-wise Data Separation
+
+Every important academic record must be associated with an Academic Year ID.
+
+Do not mix reports belonging to different academic years.
+
+Do not delete previous academic-year records while creating a new academic year.
+
+When creating a new year, allow the administrator to reuse student and mentor profile records, but create fresh academic enrollment, assignment, timetable, semester and subject records as appropriate.
+
+Never copy previous activity reports into a new year.
+
+---
+
+# 6. ADMIN DASHBOARD
+
+Build a comprehensive administrative dashboard.
+
+## 6.1 Dashboard Summary Cards
+
+Display:
+
+1. Total Students.
+2. Total Mentors.
+3. Total Scheduled Periods.
+4. Total Submitted Periods.
+5. Total Approved Periods.
+6. Pending Review Periods.
+7. Returned Periods.
+8. Students with Missing Reports.
+
+These figures must be calculated from actual database records and the selected academic year.
+
+## 6.2 Dashboard Charts
+
+Create:
+
+- Weekly Activity Overview.
+- Monthly Activity Overview.
+- Semester-wise Progress Chart.
+- Submitted vs Approved Chart.
+- Mentor-wise Review Summary.
+- Student Reporting Completion Chart.
+
+Charts must use live database data.
+
+Do not use random sample values in production mode.
+
+## 6.3 Dashboard Tables
+
+Display:
+
+- Recently submitted reports.
+- Pending mentor approvals.
+- Students with missing reports.
+- Mentor-wise pending approvals.
+- Recently returned reports.
+
+Include suitable navigation links to the detailed records.
+
+---
+
+# 7. STUDENT MANAGEMENT
+
+Create a complete student management module.
+
+## 7.1 Student List
+
+Display:
+
+- Student Name.
+- Admission Number.
+- Class / Batch.
+- Assigned Mentor for selected year.
+- Academic Year.
+- Account Status.
+
+Features:
+
+- Search.
+- Filter.
+- Sorting.
+- Pagination.
+- Add Student.
+- Edit Student.
+- View Profile.
+- Activate / Deactivate.
+
+## 7.2 Student Profile
+
+Every student profile should contain tabs:
+
+1. Overview.
+2. Academic Enrollments.
+3. Mentor History.
+4. Timetable.
+5. Activity Reports.
+6. Subject History.
+7. Academic History.
+
+## 7.3 Student Creation Form
+
+Fields:
+
+- Full Name.
+- Admission Number.
+- Class / Batch.
+- Email.
+- Contact Number (optional).
+- Login Username if required.
+- Account creation / activation option.
+
+Use a secure authentication workflow for account creation.
+
+Do not store passwords directly in the application database.
+
+## 7.4 Bulk Import
+
+Where practical, provide CSV student import and export.
+
+Validate duplicate admission numbers before inserting records.
+
+Display import errors clearly.
+
+---
+
+# 8. MENTOR MANAGEMENT
+
+Create a Mentor Management module.
+
+Fields:
+
+- Mentor Name.
+- Employee Code.
+- Email.
+- Phone Number (optional).
+- Designation.
+- Login Account.
+- Account Status.
+
+Admin can:
+
+- Add Mentor.
+- Edit Mentor.
+- Activate / Deactivate Mentor.
+- View Mentor Profile.
+- View Assigned Students.
+- Assign Students.
+- Change Assignments.
+
+## 8.1 Mentor Assignment Rules
+
+Each student must have exactly one active primary mentor for each academic year.
+
+A mentor can have multiple assigned students.
+
+A student may have different mentors in different academic years.
+
+Store mentor assignments separately for every academic year.
+
+Historical mentor assignments must remain unchanged when assignments are modified for a new year.
+
+Do not delete old assignment history.
+
+Create a Mentor Assignment screen with:
+
+- Student selection.
+- Mentor selection.
+- Academic year.
+- Assignment date.
+- Assignment status.
+
+Provide an easy way to assign multiple students to one mentor.
+
+Prevent duplicate or conflicting assignments.
+
+---
+
+# 9. SEMESTER AND SUBJECT MANAGEMENT
+
+Create a Semester Management module.
+
+Admin can create semesters under an academic year.
+
+Fields:
+
+- Semester Name.
+- Academic Year.
+- Start Date.
+- End Date.
+- Status.
+
+## 9.1 Subject Management
+
+Create a master Subject list.
+
+Fields:
+
+- Subject Code.
+- Subject Name.
+- Category.
+- Status.
+
+## 9.2 Semester Subject Mapping
+
+Allow the administrator to select which subjects are available in each semester.
+
+## 9.3 Student Subject Selection
+
+For every student, provide a subject-selection management interface.
+
+The administrator must be able to mark each available subject as:
+
+- Selected.
+- Not Selected.
+
+Both statuses must be stored explicitly.
+
+Example:
+
+| Subject | Status |
+|---|---|
+| English | Selected |
+| Arabic | Selected |
+| Computer Science | Not Selected |
+| Social Studies | Selected |
+
+Create a clean semester-wise subject selection interface.
+
+Students can view their own historical subject information.
+
+Students must not modify historical subject selections.
+
+Preserve subject history even after the academic year is closed.
+
+---
+
+# 10. WEEKLY TIMETABLE MANAGEMENT
+
+Build a complete timetable management module.
+
+This is one of the central modules of the application.
+
+## 10.1 Configuration
+
+Admin can configure:
+
+- Working Days.
+- Period Count per Day.
+- Period Start Time.
+- Period End Time.
+- Period Number.
+- Planned Subject or Activity.
+
+Default configuration:
+
+Six working days and eight periods per day.
+
+But all values must be configurable.
+
+## 10.2 Timetable Editor
+
+Create a professional timetable editor with:
+
+- Days as rows.
+- Periods as columns.
+- Editable timetable cells.
+- Subject / Activity dropdown.
+- Period time.
+- Save Changes.
+- Publish Timetable.
+
+Allow the administrator to create timetable templates.
+
+## 10.3 Timetable Assignment
+
+Support:
+
+- Individual student assignment.
+- Class / Batch assignment where applicable.
+- Reusable templates.
+- Effective start and end dates.
+
+For Version 1, individual student assignment must be fully functional.
+
+## 10.4 Timetable Changes
+
+When a timetable is changed:
+
+- Apply changes to future dates.
+- Never rewrite the original timetable description of an existing submitted report.
+- Preserve past report snapshots.
+- Maintain timetable revision history where appropriate.
+
+Students must automatically see their assigned timetable.
+
+---
+
+# 11. ACADEMIC CALENDAR AND HOLIDAY MANAGEMENT
+
+Create an Academic Calendar module.
+
+Admin can define:
+
+- College Holidays.
+- Weekly Off Days.
+- Special Working Days.
+- Period-wise Cancellations if required.
+
+Non-working days must not require student activity reports.
+
+A full-day holiday should automatically exclude that date from expected reporting calculations.
+
+An individually cancelled period should not be treated as a missing student report.
+
+Students should clearly see cancelled periods and holidays in their timetable.
+
+All calendar changes must be recorded.
+
+---
+
+# 12. STUDENT ACTIVITY REPORTING – MOST IMPORTANT MODULE
+
+The Student panel must be exceptionally simple.
+
+The main purpose is to record what the student actually did during each timetable period.
+
+## 12.1 Student Dashboard
+
+Show:
+
+- Student Name.
+- Admission Number.
+- Current Academic Year.
+- Assigned Mentor.
+- Current Semester.
+- Today's Date.
+- Today's Timetable.
+- Reporting Status.
+- Pending Corrections.
+- Recent Reports.
+
+Use clean status cards.
+
+## 12.2 Period-wise Activity Form
+
+Example:
+
+Monday
+
+Period 1 – English.
+
+Period 2 – Arabic.
+
+Period 3 – Library.
+
+Period 4 – Skill Development.
+
+Show the planned timetable activity automatically.
+
+Provide an editable activity description field for each period.
+
+The student should not need to enter the planned subject or activity again.
+
+## 12.3 Period Entry Fields
+
+Every scheduled period must have:
+
+1. Date.
+2. Period Number.
+3. Planned Activity (read-only snapshot).
+4. Actual Activity Description.
+5. Activity Status.
+6. Optional Notes.
+
+Activity Status options:
+
+- Completed.
+- No Activity – Reason Required.
+- Absent / Unable to Participate – Reason Required.
+- Timetable Cancelled – Admin-controlled.
+
+Do not allow students to cancel their own timetable periods.
+
+## 12.4 Form Experience
+
+Make activity entry easy.
+
+For each period:
+
+- Display period number.
+- Display planned subject.
+- Provide a large text input.
+- Allow the student to save a draft.
+- Display the period's approval status.
+
+Provide:
+
+- Save Draft.
+- Submit Report.
+- View Status.
+
+Prevent accidental duplicate submissions.
+
+Preserve drafts when the student navigates away, using the backend as the persistent source.
+
+---
+
+# 13. DAILY / WEEKLY ENTRY SETTINGS
+
+Provide an independent Entry Mode configuration in Admin Settings.
+
+Options:
+
+1. Daily Entry.
+2. Weekly Entry.
+
+## 13.1 Daily Entry Mode
+
+Display each day's activities separately.
+
+The student opens a date and sees that day's scheduled periods.
+
+The student enters and saves the activity for each period.
+
+## 13.2 Weekly Entry Mode
+
+Display the entire week's timetable in one screen.
+
+Show all working days and periods.
+
+The student can navigate between days or view the weekly grid.
+
+The interface must remain easy to use on mobile devices.
+
+Weekly Entry is an interface mode; it must not bypass daily reporting restrictions when Daily Approval is selected.
+
+---
+
+# 14. DAILY / WEEKLY MENTOR APPROVAL SETTINGS
+
+Provide a separate Approval Mode setting.
+
+Options:
+
+1. Daily Approval.
+2. Weekly Approval.
+
+The Entry Mode and Approval Mode must work independently.
+
+All four combinations must be implemented.
+
+## 14.1 Daily Entry + Daily Approval
+
+1. Student enters today's activities.
+2. Student submits the daily report.
+3. Mentor reviews periods individually.
+4. Mentor approves the periods.
+5. The day becomes approved only when all required periods are approved.
+6. The next scheduled reporting day unlocks.
+
+## 14.2 Daily Entry + Weekly Approval
+
+1. Student enters activities separately for each day.
+2. Daily reports can be saved as drafts.
+3. The system collects those entries into the weekly reporting unit.
+4. The student submits the completed week.
+5. Mentor reviews periods individually.
+6. The full week becomes approved when all required periods are approved.
+7. The next reporting week unlocks.
+
+## 14.3 Weekly Entry + Daily Approval
+
+1. Student sees all days in one weekly interface.
+2. The system allows entry into the appropriate reporting day.
+3. Each day has a separate submission unit.
+4. Mentor approves every required period of that day.
+5. The next scheduled day unlocks only after the previous day is approved.
+
+The weekly interface must not bypass daily approval restrictions.
+
+## 14.4 Weekly Entry + Weekly Approval
+
+1. Student sees the complete weekly reporting interface.
+2. Student records activities for all scheduled days.
+3. Student submits the weekly report.
+4. Mentor examines periods individually.
+5. The weekly report becomes approved when all required periods are approved.
+6. The next reporting week unlocks.
+
+## 14.5 CRITICAL REPORTING IMPLEMENTATION RULE
+
+Do not confuse:
+
+- Entry Mode.
+- Approval Mode.
+- Reporting Submission Unit.
+
+Entry Mode controls how the student sees and enters information.
+
+Approval Mode controls the boundary at which the mentor must approve the work.
+
+Use the following logic:
+
+- Daily Approval = one approval unit per scheduled day.
+- Weekly Approval = one approval unit per reporting week.
+
+In Daily Entry + Weekly Approval, keep the daily inputs inside one weekly approval unit.
+
+In Weekly Entry + Daily Approval, keep separate daily approval units inside the weekly interface.
+
+Store both Entry Mode and Approval Mode as snapshots when a new reporting unit is created, so later setting changes cannot corrupt historical workflows.
+
+## 14.6 Sequential Locking
+
+Implement a proper backend validation for reporting progression.
+
+Daily Approval:
+
+The next scheduled reporting day is locked until the previous scheduled day is fully approved.
+
+Weekly Approval:
+
+The next reporting week is locked until the previous week's reporting unit is fully approved.
+
+The first reporting unit of the academic year must not require a previous approval.
+
+Ignore weekends, college holidays, and authorized cancelled periods.
+
+Do not rely only on disabled buttons in the frontend.
+
+The backend must reject unauthorized submissions.
+
+## 14.7 Settings Changes
+
+Admin can change Entry Mode and Approval Mode independently.
+
+Warn the administrator before changing settings when drafts or pending reports exist.
+
+New settings should normally apply to future reporting units.
+
+Existing submitted reports must retain their original reporting rules.
+
+Do not automatically delete, merge, or rewrite existing report data.
+
+---
+
+# 15. REPORT STATUS SYSTEM
+
+Implement clear reporting statuses:
+
+- Not Started.
+- Draft.
+- Submitted.
+- Pending Review.
+- Partially Reviewed.
+- Returned.
+- Approved.
+
+Individual period statuses:
+
+- Pending.
+- Approved.
+- Returned.
+
+The reporting unit becomes approved only when every required period has been approved.
+
+A returned period must be editable by the student.
+
+When the student resubmits a returned period, its mentor status must return to Pending.
+
+The mentor must review the revised entry again.
+
+Preserve all previous review actions in review history.
+
+Approved periods must not be editable by students.
+
+---
+
+# 16. MENTOR DASHBOARD AND APPROVAL INTERFACE
+
+Build a professional Mentor Dashboard.
+
+## 16.1 Mentor Summary Cards
+
+- Total Assigned Students.
+- Submitted Today.
+- Pending Approvals.
+- Approved Reports.
+- Returned Reports.
+- Students Yet to Submit.
+
+## 16.2 My Students
+
+Create a searchable and filterable table.
+
+Columns:
+
+- Student Name.
+- Admission Number.
+- Class / Batch.
+- Today's Report Status.
+- Pending Periods.
+- Approved Periods.
+- View Details.
+
+A mentor must see only authorized assigned students.
+
+## 16.3 Student Detail Screen
+
+When a mentor opens a student:
+
+Display tabs:
+
+- Overview.
+- Timetable.
+- Today's Reports.
+- Weekly Reports.
+- Activity History.
+- Progress Summary.
+
+## 16.4 Period Review Screen
+
+Example:
+
+Student A – Monday.
+
+Period 1 – English.
+
+Student's actual activity description.
+
+Buttons:
+
+- Approve.
+- Return for Correction.
+
+Period 2 – Arabic.
+
+Student's actual activity description.
+
+Buttons:
+
+- Approve.
+- Return for Correction.
+
+And so on.
+
+Implement one-click period approval with confirmation where appropriate.
+
+For Return:
+
+Require a correction comment.
+
+Display the mentor's name and review timestamp.
+
+## 16.5 Bulk Actions
+
+Provide carefully controlled bulk approval of suitable periods where appropriate, but keep individual-period approval fully available.
+
+Do not allow a reporting unit to be finalized while required periods remain pending or returned.
+
+---
+
+# 17. STUDENT ACADEMIC HISTORY
+
+Create a dedicated Academic History page.
+
+Display previous academic years.
+
+Example:
+
+2024–25.
+
+2025–26.
+
+2026–27.
+
+When a student opens a previous academic year, show:
+
+- Enrollment details.
+- Assigned mentor.
+- Semester information.
+- Available subjects.
+- Selected subjects.
+- Not-selected subjects.
+- Weekly activity reports.
+- Date-wise reports.
+- Mentor approval statuses.
+- Historical comments.
+
+Use read-only access for previous years.
+
+Students must be able to view their complete academic history without modifying it.
+
+---
+
+# 18. ADMIN REPORTS AND ANALYTICS
+
+This must be a comprehensive module.
+
+Provide navigation:
+
+1. Weekly Overview.
+2. Monthly Overview.
+3. Semester Overview.
+4. Student Reports.
+5. Mentor Reports.
+6. Detailed Activity Reports.
+
+## 18.1 Weekly Overview
+
+Display:
+
+- Number of students.
+- Expected periods.
+- Submitted periods.
+- Approved periods.
+- Pending periods.
+- Returned periods.
+- Missing periods.
+
+## 18.2 Monthly Overview
+
+Display monthly activity and approval statistics.
+
+## 18.3 Semester Overview
+
+Display semester-wise overall progress.
+
+## 18.4 Student Reports
+
+Show an individual student's:
+
+- Expected periods.
+- Submitted activities.
+- Approved activities.
+- Pending activities.
+- Returned activities.
+- Missing activities.
+- Completion percentage.
+
+## 18.5 Mentor Reports
+
+Show:
+
+- Assigned student count.
+- Pending approvals.
+- Completed reviews.
+- Returned reports.
+- Student progress.
+- Review activity.
+
+## 18.6 Filters
+
+Provide filters:
+
+- Academic Year.
+- Semester.
+- Month.
+- Week.
+- Class / Batch.
+- Mentor.
+- Student.
+- Report Status.
+
+## 18.7 Export
+
+Provide:
+
+- CSV export.
+- Print-friendly reports.
+- PDF download where technically supported.
+- Excel-compatible report export.
+
+All report data must be calculated from actual database records.
+
+## 18.8 Accuracy Rules
+
+Expected period count must be calculated from the applicable student timetable and academic calendar.
+
+Exclude:
+
+- Non-working days.
+- Full-day holidays.
+- Authorized cancelled periods.
+
+Do not count a Draft report as Submitted.
+
+Do not count a Submitted report as Approved.
+
+Show expected, submitted, and approved totals separately.
+
+---
+
+# 19. NOTIFICATION SYSTEM
+
+Implement a simple internal notification system.
+
+Generate notifications for:
+
+Student:
+
+- Report returned for correction.
+- Report approved.
+- New reporting period unlocked.
+- Reporting deadline approaching if configured.
+
+Mentor:
+
+- New report submitted.
+- Correction resubmitted.
+- Pending review reminder.
+
+Admin:
+
+- Overall pending approval alerts.
+- Incomplete student reporting alerts where applicable.
+
+Provide a notification icon with unread count.
+
+Notifications must be linked to the relevant student, report, or review page.
+
+Email or push notification integrations are optional future enhancements.
+
+---
+
+# 20. DATABASE ARCHITECTURE
+
+Create the PostgreSQL database with proper normalized relationships.
+
+Required tables:
+
+1. profiles.
+2. students.
+3. mentors.
+4. academic_years.
+5. app_settings.
+6. academic_year_settings.
+7. student_academic_enrollments.
+8. mentor_assignments.
+9. semesters.
+10. subjects.
+11. semester_subjects.
+12. student_subject_selections.
+13. timetable_templates.
+14. timetable_slots.
+15. student_timetable_assignments.
+16. timetable_overrides, if required.
+17. academic_calendar_exceptions.
+18. report_submissions.
+19. period_activity_entries.
+20. report_review_history.
+21. notifications.
+22. audit_logs.
+
+### Database Design Rules
+
+Every academic record must be linked to the appropriate academic year.
+
+Every student activity entry must have:
+
+- Student ID.
+- Academic Year ID.
+- Activity Date.
+- Period Number.
+- Planned Activity Snapshot.
+- Actual Activity.
+- Submission Reference.
+- Approval Status.
+
+Use foreign keys.
+
+Use unique constraints.
+
+Use proper indexes.
+
+Prevent duplicate reports and duplicate period entries.
+
+Use transactions for operations involving multiple dependent records.
+
+Maintain historical data.
+
+Do not store all period reports inside one large JSON column.
+
+Use individual relational records for each period.
+
+Implement appropriate `created_at`, `updated_at`, and relevant audit timestamps.
+
+Generate SQL migration files and document the database setup.
+
+---
+
+# 21. DATABASE SECURITY AND RLS
+
+Security is mandatory.
+
+Enable Row Level Security for all relevant tables.
+
+Access rules:
+
+Admin:
+Can access authorized administrative records.
+
+Mentor:
+Can access records linked to their authorized mentor assignments.
+
+Student:
+Can access only their own records.
+
+Student editing:
+Only permitted draft or returned records.
+
+Student approval:
+Never allowed.
+
+Mentor editing:
+Only permitted review fields for authorized students.
+
+Mentor must not alter the student's original submitted text.
+
+Academic-year setting changes:
+Admin only.
+
+All important authorization checks must be done on the server/database, not merely in the frontend.
+
+Use secure server-side operations for privileged actions.
+
+Never expose service-role credentials.
+
+Create test cases to validate RLS.
+
+---
+
+# 22. AUDIT LOGGING
+
+Track these operations:
+
+- Login events where appropriate.
+- Academic year created.
+- Academic year switched.
+- Academic year closed or reopened.
+- Student created or updated.
+- Mentor created or updated.
+- Mentor assignment changed.
+- Timetable published or modified.
+- Entry Mode changed.
+- Approval Mode changed.
+- Report submitted.
+- Period approved.
+- Period returned.
+- Period resubmitted.
+- Administrative correction.
+
+Store:
+
+- User ID.
+- Action.
+- Record Type.
+- Record ID.
+- Timestamp.
+- Relevant change information.
+
+Audit logs must not be editable by ordinary users.
+
+---
+
+# 23. SYSTEM SETTINGS PAGE
+
+Create a centralized Admin Settings page.
+
+Sections:
+
+## General Settings
+
+- Institution Name.
+- Logo.
+- Timezone.
+- Default Language.
+
+## Academic Settings
+
+- Default Working Days.
+- Default Period Count.
+- Week Start Day.
+
+## Reporting Settings
+
+- Student Entry Mode: Daily / Weekly.
+- Mentor Approval Mode: Daily / Weekly.
+
+## Notification Settings
+
+- In-app notifications.
+- Reminder configuration.
+
+## Security Settings
+
+- User account management.
+- Session-related settings.
+
+Make all settings functional and persist them in the database.
+
+Show an appropriate warning before changing workflow settings.
+
+---
+
+# 24. APPLICATION NAVIGATION STRUCTURE
+
+## ADMIN SIDEBAR
+
+1. Dashboard.
+2. Academic Years.
+3. Students.
+4. Mentors.
+5. Mentor Assignments.
+6. Semesters & Subjects.
+7. Timetable.
+8. Academic Calendar.
+9. Reports & Analytics.
+10. Notifications.
+11. Settings.
+12. Audit Logs.
+
+## MENTOR SIDEBAR
+
+1. Dashboard.
+2. My Students.
+3. Pending Approvals.
+4. Approved Reports.
+5. Returned Reports.
+6. Activity History.
+7. Notifications.
+8. Profile.
+
+## STUDENT SIDEBAR
+
+1. Dashboard.
+2. Weekly Timetable.
+3. Activity Reporting.
+4. My Reports.
+5. Academic History.
+6. Notifications.
+7. Profile.
+
+Ensure role-based navigation so users never see unauthorized menu items.
+
+---
+
+# 25. ERROR HANDLING AND PERFORMANCE
+
+The system must:
+
+- Handle network errors.
+- Handle database errors.
+- Handle authentication errors.
+- Prevent duplicate submissions.
+- Show useful validation errors.
+- Display loading states.
+- Support pagination for large tables.
+- Use efficient database queries.
+- Avoid unnecessary page reloads.
+- Refresh relevant data after successful actions.
+- Provide clear empty states.
+
+Use proper TypeScript types and reusable services.
+
+Do not place all business logic inside large frontend components.
+
+Keep the code modular and maintainable.
+
+---
+
+# 26. TESTING REQUIREMENTS
+
+Create and run tests for the following.
+
+### Authentication
+
+- Admin login.
+- Mentor login.
+- Student login.
+- Invalid login.
+- Inactive account.
+- Unauthorized route access.
+
+### Academic Year
+
+- Create year.
+- Switch year.
+- Close year.
+- Reopen year.
+- Verify historical records.
+
+### Student and Mentor
+
+- Create student.
+- Create mentor.
+- Assign mentor.
+- Change mentor in a new year.
+- Verify historical assignments.
+
+### Timetable
+
+- Create timetable.
+- Edit timetable.
+- Assign timetable.
+- Verify student timetable.
+- Change timetable.
+- Verify existing reports are preserved.
+
+### Reporting
+
+Test all four combinations:
+
+1. Daily Entry + Daily Approval.
+2. Daily Entry + Weekly Approval.
+3. Weekly Entry + Daily Approval.
+4. Weekly Entry + Weekly Approval.
+
+### Mentor Approval
+
+- Approve period.
+- Return period.
+- Correct returned period.
+- Resubmit period.
+- Verify approval status.
+- Verify sequential unlocking.
+
+### Security
+
+- Student cannot access another student.
+- Mentor cannot access unrelated students.
+- Student cannot approve reports.
+- Student cannot modify approved reports.
+- Non-admin cannot switch institutional settings.
+- Closed academic years do not accept normal submissions.
+
+---
+
+# 27. DEVELOPMENT EXECUTION PLAN
+
+Develop the project in the following sequence.
+
+Do not skip stages.
+
+## Stage 1 – Project Foundation
+
+- Initialize application.
+- Establish architecture.
+- Create design system.
+- Set up Supabase.
+- Create database migrations.
+- Implement authentication.
+- Implement role-based navigation.
+- Implement Academic Year Management.
+
+## Stage 2 – Academic Management
+
+- Student module.
+- Mentor module.
+- Mentor assignments.
+- Semester module.
+- Subject module.
+- Student subject selection.
+
+## Stage 3 – Timetable
+
+- Working days.
+- Periods.
+- Templates.
+- Timetable editor.
+- Student assignments.
+- Calendar exceptions.
+
+## Stage 4 – Student Reporting
+
+- Dashboard.
+- Daily reporting.
+- Weekly reporting.
+- Period-wise forms.
+- Draft saving.
+- Submission validation.
+- Reporting status.
+
+## Stage 5 – Mentor Verification
+
+- Mentor dashboard.
+- Student list.
+- Period approval.
+- Return for correction.
+- Review history.
+- Daily/Weekly workflow.
+- Sequential locking.
+
+## Stage 6 – History and Analytics
+
+- Student history.
+- Subject history.
+- Weekly reports.
+- Monthly reports.
+- Semester reports.
+- Mentor reports.
+- Admin analytics.
+- Exports.
+
+## Stage 7 – Security and Finalization
+
+- RLS policies.
+- Permission testing.
+- Workflow testing.
+- Performance improvements.
+- Deployment documentation.
+- Database backup instructions.
+
+Build functional features at each stage.
+
+Do not create all screens first and leave their buttons disconnected.
+
+---
+
+# 28. VERY IMPORTANT DEVELOPMENT BEHAVIOUR
+
+Follow these instructions throughout development.
+
+1. Always prioritize functional correctness over visual decoration.
+2. Use a consistent professional design system.
+3. Do not create fake database actions.
+4. Do not use hardcoded production data.
+5. Do not leave empty placeholder pages for mandatory modules.
+6. Do not use non-functional buttons.
+7. Connect every form to the database.
+8. Implement proper form validation.
+9. Implement backend authorization.
+10. Keep historical data safe.
+11. Test every reporting combination.
+12. Keep the code modular.
+13. Use meaningful component names.
+14. Create reusable UI components.
+15. Avoid unnecessary complexity.
+16. Do not remove an existing working feature when adding a new one.
+17. Do not replace a working backend with mock data to make the UI appear complete.
+18. Keep the existing project structure intact when extending the application.
+19. If any implementation limitation occurs, explain it and provide the actual working alternative.
+20. Never report a module as completed unless its essential functionality has been implemented and tested.
+
+---
+
+# 29. FINAL DELIVERABLES
+
+The final application must contain:
+
+- Complete responsive web application.
+- Professional Admin Dashboard.
+- Professional Mentor Dashboard.
+- Professional Student Dashboard.
+- Functional authentication.
+- Academic Year Management.
+- Student Management.
+- Mentor Management.
+- Mentor Assignment.
+- Semester and Subject Management.
+- Timetable Management.
+- Academic Calendar.
+- Period-wise Activity Reporting.
+- Daily/Weekly Entry Settings.
+- Daily/Weekly Approval Settings.
+- Period-wise Mentor Approval.
+- Correction Workflow.
+- Sequential Reporting Locking.
+- Previous Academic Year History.
+- Subject Selection History.
+- Weekly Analytics.
+- Monthly Analytics.
+- Semester Analytics.
+- Notifications.
+- Audit Logs.
+- PostgreSQL Database Schema.
+- SQL Migrations.
+- RLS Policies.
+- Setup Documentation.
+- Deployment Documentation.
+- Testing Documentation.
+
+---
+
+# 30. FINAL ACCEPTANCE CONDITION
+
+The project is not complete merely because the application looks attractive.
+
+It is complete only when:
+
+- Admin can manage the institution.
+- Mentors can manage and verify their assigned students.
+- Students can record actual activities for every scheduled period.
+- Mentor approval works correctly.
+- All four reporting combinations work.
+- Sequential report locking works.
+- Academic-year switching works.
+- Historical information is preserved.
+- Subject selection history works.
+- Analytics calculate actual database values.
+- Database security prevents unauthorized access.
+- The application works on mobile and desktop.
+
+The final outcome must be a professional, fully functional academic management application suitable for actual deployment and daily use at KKHM Islamic & Arts College.
+
+**BUILD THIS APPLICATION, NOT JUST A DESIGN OR PROTOTYPE.**
+
+Start by inspecting the development environment, establishing the database and application architecture, and implementing Stage 1. Then continue through all stages, preserving previously implemented functionality.
+
+If the environment or generation limit requires multiple implementation steps, maintain a clear progress checklist and continue from the existing working code without discarding completed modules.
+
+At the end, provide a clear implementation summary, list any components that still require external credentials or manual configuration, and provide the exact instructions needed to run and deploy the application.
