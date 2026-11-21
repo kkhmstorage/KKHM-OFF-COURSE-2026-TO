@@ -24,7 +24,6 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@esbuild/win32-x64": "^0.28.2",
     "@types/node": "^22.14.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
