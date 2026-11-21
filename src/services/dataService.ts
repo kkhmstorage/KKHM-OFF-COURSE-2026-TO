@@ -456,6 +456,20 @@ class DataService {
       password: string;
       academic_year_id: string;
       is_active?: boolean;
+      // CIC Academic Details
+      cic_ad_no?: string;
+      clg_ad_no?: string;
+      academic_year_text?: string;
+      semester_text?: string;
+      semester_period?: string;
+      course_stream?: string;
+      college_name?: string;
+      subject_title?: string;
+      proposal_app_no?: string;
+      course_credit?: string;
+      guide_name?: string;
+      whatsapp_number?: string;
+      reference_notes?: string;
     }
   ): Promise<void> {
     this.assertAdmin(actor);
@@ -553,6 +567,19 @@ class DataService {
       profile_id: profId,
       admission_number: payload.admission_number.trim(),
       batch_name: payload.batch_name.trim(),
+      cic_ad_no: payload.cic_ad_no?.trim(),
+      clg_ad_no: payload.clg_ad_no?.trim() || payload.admission_number.trim(),
+      academic_year_text: payload.academic_year_text?.trim(),
+      semester_text: payload.semester_text?.trim(),
+      semester_period: payload.semester_period?.trim(),
+      course_stream: payload.course_stream?.trim(),
+      college_name: payload.college_name?.trim(),
+      subject_title: payload.subject_title?.trim(),
+      proposal_app_no: payload.proposal_app_no?.trim(),
+      course_credit: payload.course_credit?.trim(),
+      guide_name: payload.guide_name?.trim(),
+      whatsapp_number: payload.whatsapp_number?.trim(),
+      reference_notes: payload.reference_notes?.trim(),
       created_at: now,
       updated_at: now,
     });
@@ -572,6 +599,7 @@ class DataService {
       admission_number: payload.admission_number.trim(),
       username: payload.username.trim(),
     });
+    this.saveSandbox();
   }
 
   public async updateStudent(
@@ -586,6 +614,20 @@ class DataService {
       username: string;
       new_password?: string;
       is_active: boolean;
+      // CIC Academic Details
+      cic_ad_no?: string;
+      clg_ad_no?: string;
+      academic_year_text?: string;
+      semester_text?: string;
+      semester_period?: string;
+      course_stream?: string;
+      college_name?: string;
+      subject_title?: string;
+      proposal_app_no?: string;
+      course_credit?: string;
+      guide_name?: string;
+      whatsapp_number?: string;
+      reference_notes?: string;
     }
   ): Promise<void> {
     this.assertAdmin(actor);
@@ -653,6 +695,19 @@ class DataService {
     const now = new Date().toISOString();
     stu.admission_number = payload.admission_number.trim();
     stu.batch_name = payload.batch_name.trim();
+    if (payload.cic_ad_no !== undefined) stu.cic_ad_no = payload.cic_ad_no.trim();
+    if (payload.clg_ad_no !== undefined) stu.clg_ad_no = payload.clg_ad_no.trim();
+    if (payload.academic_year_text !== undefined) stu.academic_year_text = payload.academic_year_text.trim();
+    if (payload.semester_text !== undefined) stu.semester_text = payload.semester_text.trim();
+    if (payload.semester_period !== undefined) stu.semester_period = payload.semester_period.trim();
+    if (payload.course_stream !== undefined) stu.course_stream = payload.course_stream.trim();
+    if (payload.college_name !== undefined) stu.college_name = payload.college_name.trim();
+    if (payload.subject_title !== undefined) stu.subject_title = payload.subject_title.trim();
+    if (payload.proposal_app_no !== undefined) stu.proposal_app_no = payload.proposal_app_no.trim();
+    if (payload.course_credit !== undefined) stu.course_credit = payload.course_credit.trim();
+    if (payload.guide_name !== undefined) stu.guide_name = payload.guide_name.trim();
+    if (payload.whatsapp_number !== undefined) stu.whatsapp_number = payload.whatsapp_number.trim();
+    if (payload.reference_notes !== undefined) stu.reference_notes = payload.reference_notes.trim();
     stu.updated_at = now;
 
     prof.full_name = payload.full_name.trim();
@@ -661,7 +716,9 @@ class DataService {
     prof.username = payload.username.trim();
     prof.is_active = payload.is_active;
     if (payload.new_password && payload.new_password.trim().length >= 6) {
-      prof.password_sandbox = payload.new_password.trim();
+      prof.password_hash_sandbox = await hashPassword(payload.new_password.trim());
+      prof.password_sandbox = undefined;
+      prof.is_temporary_password = false;
     }
     prof.updated_at = now;
 
@@ -670,6 +727,7 @@ class DataService {
       username: prof.username,
       password_reset: Boolean(payload.new_password?.trim()),
     });
+    this.saveSandbox();
   }
 
   public async enrollStudentInYear(

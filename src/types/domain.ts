@@ -50,11 +50,47 @@ export interface Profile {
   updated_at: string;
 }
 
+export type CicCourseStream =
+  | 'Wafy'
+  | 'Wafy Arts'
+  | 'Wafiyya'
+  | 'Wafiyya Day'
+  | 'Wafiyya Arts'
+  | 'Wafiyya Distance';
+
+export type CicSemesterPeriod = 'Nov' | 'May';
+
 export interface Student {
   id: string;
   profile_id: string;
   admission_number: string;
   batch_name: string;
+  /** CIC Admission Number */
+  cic_ad_no?: string;
+  /** College Admission Number (alias/explicit) */
+  clg_ad_no?: string;
+  /** Academic Year (e.g. 2026-27) */
+  academic_year_text?: string;
+  /** Semester (e.g. Semester 1, 2) */
+  semester_text?: string;
+  /** Session Period (Nov / May) */
+  semester_period?: CicSemesterPeriod | string;
+  /** Course Stream */
+  course_stream?: CicCourseStream | string;
+  /** College Affiliation & Name */
+  college_name?: string;
+  /** Subject / Off-Course Topic Title */
+  subject_title?: string;
+  /** Off Course Proposal Application Number */
+  proposal_app_no?: string;
+  /** Course Credit */
+  course_credit?: string;
+  /** Name of Guide */
+  guide_name?: string;
+  /** Whatsapp Number */
+  whatsapp_number?: string;
+  /** Reference / bibliography / notes */
+  reference_notes?: string;
   guardian_phone?: string;
   notes?: string;
   created_at: string;

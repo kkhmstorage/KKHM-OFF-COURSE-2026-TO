@@ -38,6 +38,20 @@ interface StudentRow {
   isActive: boolean;
   mentorName: string;
   enrolledInActiveYear: boolean;
+  // CIC Academic & Subject Details
+  cicAdNo?: string;
+  clgAdNo?: string;
+  academicYearText?: string;
+  semesterText?: string;
+  semesterPeriod?: string;
+  courseStream?: string;
+  collegeName?: string;
+  subjectTitle?: string;
+  proposalAppNo?: string;
+  courseCredit?: string;
+  guideName?: string;
+  whatsappNumber?: string;
+  referenceNotes?: string;
 }
 
 export const StudentsModule: React.FC = () => {
@@ -50,7 +64,7 @@ export const StudentsModule: React.FC = () => {
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
-  // Create / Edit Modal State
+  // Create / Edit Modal State (Basic & Credentials)
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
@@ -64,13 +78,30 @@ export const StudentsModule: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // CIC Academic Details State (matching official CIC form)
+  const [cicAdNo, setCicAdNo] = useState('');
+  const [clgAdNo, setClgAdNo] = useState('');
+  const [academicYearText, setAcademicYearText] = useState('2026-27');
+  const [semesterText, setSemesterText] = useState('Semester 1');
+  const [semesterPeriod, setSemesterPeriod] = useState<'Nov' | 'May'>('Nov');
+  const [courseStream, setCourseStream] = useState<string>('Wafy');
+  const [collegeName, setCollegeName] = useState('KKHM Islamic & Arts College');
+
+  // CIC Subject Details State
+  const [subjectTitle, setSubjectTitle] = useState('');
+  const [proposalAppNo, setProposalAppNo] = useState('');
+  const [courseCredit, setCourseCredit] = useState('4');
+  const [guideName, setGuideName] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [referenceNotes, setReferenceNotes] = useState('');
+
   // Bulk Excel / CSV Import Modal State
   const [importOpen, setImportOpen] = useState(false);
   const [importMode, setImportMode] = useState<'excel' | 'paste'>('excel');
   const [uploadedFileName, setUploadedFileName] = useState<string>('');
   const [parsedBulkRows, setParsedBulkRows] = useState<ParsedBulkStudentRow[]>([]);
   const [csvText, setCsvText] = useState(
-    'Full Name *,Admission Number *,Class / Batch *,Email,Phone,Username *,Password *\nRashid Ali P,KKHM2605,Degree 1st Year (Foundation Stream),rashid.2605@kkhmcollege.edu.in,+91 97450 40105,student7,Student@2026'
+    'Name of Student *,CIC Ad No,Clg Ad No *,Class / Department *,Academic Year,Semester,Session (Nov/May),Course Stream,College Affl. & Name,Subject Title,Off Course Proposal Application Number,Credit,Name of Guide,Phone Number,Whatsapp Number,Reference,Username *,Password *\nRashid Ali P,CIC2601,KKHM2605,Degree 1st Year,2026-27,Semester 1,Nov,Wafy,KKHM Islamic & Arts College,Tafsir Studies,PROP-2026-088,4,Usthad Rashid,+91 97450 40105,+91 97450 40105,Tafsir al-Qurtubi,student7,Student@2026'
   );
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [importingBulk, setImportingBulk] = useState(false);
@@ -106,6 +137,19 @@ export const StudentsModule: React.FC = () => {
         isActive: prof?.is_active ?? true,
         mentorName: mentorProf?.full_name || 'Unassigned',
         enrolledInActiveYear: Boolean(enr),
+        cicAdNo: stu.cic_ad_no,
+        clgAdNo: stu.clg_ad_no || stu.admission_number,
+        academicYearText: stu.academic_year_text,
+        semesterText: stu.semester_text,
+        semesterPeriod: stu.semester_period,
+        courseStream: stu.course_stream,
+        collegeName: stu.college_name,
+        subjectTitle: stu.subject_title,
+        proposalAppNo: stu.proposal_app_no,
+        courseCredit: stu.course_credit,
+        guideName: stu.guide_name,
+        whatsappNumber: stu.whatsapp_number,
+        referenceNotes: stu.reference_notes,
       };
     });
   }, [db, activeYear]);
@@ -145,12 +189,27 @@ export const StudentsModule: React.FC = () => {
     setEditingId(null);
     setFullName('');
     setAdmissionNumber('');
-    setBatchName(batches[0] || 'Degree 1st Year (Foundation Stream)');
+    setBatchName(batches[0] || 'Degree 1st Year');
     setEmail('');
     setPhone('');
     setUsername('');
     setPassword('');
     setIsActive(true);
+    // Reset CIC Details
+    setCicAdNo('');
+    setClgAdNo('');
+    setAcademicYearText(activeYear.name || '2026-27');
+    setSemesterText('Semester 1');
+    setSemesterPeriod('Nov');
+    setCourseStream('Wafy');
+    setCollegeName('KKHM Islamic & Arts College');
+    // Reset Subject Details
+    setSubjectTitle('');
+    setProposalAppNo('');
+    setCourseCredit('4');
+    setGuideName('');
+    setWhatsappNumber('');
+    setReferenceNotes('');
     setFormError(null);
     setEditorOpen(true);
   };
@@ -165,6 +224,21 @@ export const StudentsModule: React.FC = () => {
     setUsername(row.username);
     setPassword('');
     setIsActive(row.isActive);
+    // Populate CIC Details
+    setCicAdNo(row.cicAdNo || '');
+    setClgAdNo(row.clgAdNo || row.admissionNumber || '');
+    setAcademicYearText(row.academicYearText || activeYear.name || '2026-27');
+    setSemesterText(row.semesterText || 'Semester 1');
+    setSemesterPeriod((row.semesterPeriod === 'May' ? 'May' : 'Nov') as 'Nov' | 'May');
+    setCourseStream(row.courseStream || 'Wafy');
+    setCollegeName(row.collegeName || 'KKHM Islamic & Arts College');
+    // Populate Subject Details
+    setSubjectTitle(row.subjectTitle || '');
+    setProposalAppNo(row.proposalAppNo || '');
+    setCourseCredit(row.courseCredit || '4');
+    setGuideName(row.guideName || '');
+    setWhatsappNumber(row.whatsappNumber || row.phone || '');
+    setReferenceNotes(row.referenceNotes || '');
     setFormError(null);
     setEditorOpen(true);
   };
@@ -173,30 +247,60 @@ export const StudentsModule: React.FC = () => {
     e.preventDefault();
     setFormError(null);
     setSaving(true);
+    const finalAdmissionNo = clgAdNo.trim() || admissionNumber.trim();
+    const finalUsername = username.trim() || finalAdmissionNo.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const finalEmail = email.trim() || `${finalUsername}@kkhmcollege.edu.in`;
+
     try {
       if (editingId) {
         await dataService.updateStudent(session.profile, editingId, {
           full_name: fullName,
-          admission_number: admissionNumber,
+          admission_number: finalAdmissionNo,
           batch_name: batchName,
-          email,
+          email: finalEmail,
           phone,
-          username,
+          username: finalUsername,
           new_password: password || undefined,
           is_active: isActive,
+          cic_ad_no: cicAdNo,
+          clg_ad_no: finalAdmissionNo,
+          academic_year_text: academicYearText,
+          semester_text: semesterText,
+          semester_period: semesterPeriod,
+          course_stream: courseStream,
+          college_name: collegeName,
+          subject_title: subjectTitle,
+          proposal_app_no: proposalAppNo,
+          course_credit: courseCredit,
+          guide_name: guideName,
+          whatsapp_number: whatsappNumber,
+          reference_notes: referenceNotes,
         });
         notify('success', `Student "${fullName}" updated successfully.`);
       } else {
         await dataService.createStudent(session.profile, {
           full_name: fullName,
-          admission_number: admissionNumber,
+          admission_number: finalAdmissionNo,
           batch_name: batchName,
-          email,
+          email: finalEmail,
           phone,
-          username,
-          password,
+          username: finalUsername,
+          password: password || 'Student@2026',
           academic_year_id: activeYear.id,
           is_active: isActive,
+          cic_ad_no: cicAdNo,
+          clg_ad_no: finalAdmissionNo,
+          academic_year_text: academicYearText,
+          semester_text: semesterText,
+          semester_period: semesterPeriod,
+          course_stream: courseStream,
+          college_name: collegeName,
+          subject_title: subjectTitle,
+          proposal_app_no: proposalAppNo,
+          course_credit: courseCredit,
+          guide_name: guideName,
+          whatsapp_number: whatsappNumber,
+          reference_notes: referenceNotes,
         });
         notify('success', `Student "${fullName}" created and enrolled in ${activeYear.name}.`);
       }
@@ -338,6 +442,19 @@ export const StudentsModule: React.FC = () => {
             password: row.password,
             academic_year_id: activeYear.id,
             is_active: true,
+            cic_ad_no: row.cic_ad_no,
+            clg_ad_no: row.clg_ad_no || row.admission_number,
+            academic_year_text: row.academic_year_text,
+            semester_text: row.semester_text,
+            semester_period: row.semester_period,
+            course_stream: row.course_stream,
+            college_name: row.college_name,
+            subject_title: row.subject_title,
+            proposal_app_no: row.proposal_app_no,
+            course_credit: row.course_credit,
+            guide_name: row.guide_name,
+            whatsapp_number: row.whatsapp_number,
+            reference_notes: row.reference_notes,
           });
           importedCount++;
         } catch (err) {
@@ -533,89 +650,274 @@ export const StudentsModule: React.FC = () => {
         <PaginationBar page={page} pageSize={pageSize} total={filtered.length} onPageChange={setPage} />
       </div>
 
-      {/* Add / Edit Student Modal (with Admin Username & Password Control) */}
+      {/* Add / Edit Student Modal (with Complete CIC Form & Admin Credentials) */}
       <Modal
         open={editorOpen}
-        title={editingId ? 'Edit Student & Login Credentials' : 'Add New Student'}
-        subtitle="Admin controls the student's login username and password directly."
+        title={editingId ? 'Edit Student & CIC Form Details' : 'Add New Student (CIC Registration)'}
+        subtitle="Complete student academic registration matching the Coordination of Islamic Colleges (CIC) Off-Course Form."
         onClose={() => setEditorOpen(false)}
-        maxWidth="lg"
+        maxWidth="xl"
       >
         {formError && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-800">
             {formError}
           </div>
         )}
-        <form onSubmit={handleSave} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700">Full Name *</label>
-              <input
-                type="text"
-                required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#1E3A5F] focus:outline-none"
-              />
+        <form onSubmit={handleSave} className="space-y-6">
+          {/* Section 1: CIC Academic & Institutional Details */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2 mb-3">
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-[#1E3A5F]">
+                  1. Coordination of Islamic Colleges (CIC) — Student Details
+                </h4>
+                <p className="text-[11px] text-slate-500">Official academic stream, admission and semester information</p>
+              </div>
+              <span className="text-[10px] font-semibold text-slate-400 bg-white border border-slate-200 rounded px-2 py-0.5">
+                ISO 9001:2015
+              </span>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700">Admission Number *</label>
-              <input
-                type="text"
-                required
-                value={admissionNumber}
-                onChange={(e) => setAdmissionNumber(e.target.value)}
-                placeholder="e.g. KKHM2605"
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono focus:border-[#1E3A5F] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700">Class / Batch *</label>
-              <input
-                type="text"
-                required
-                value={batchName}
-                onChange={(e) => setBatchName(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#1E3A5F] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700">Email Address *</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#1E3A5F] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700">Contact Phone</label>
-              <input
-                type="text"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#1E3A5F] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700">Account Status</label>
-              <select
-                value={isActive ? 'active' : 'inactive'}
-                onChange={(e) => setIsActive(e.target.value === 'active')}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#1E3A5F] focus:outline-none"
-              >
-                <option value="active">Active (Login Enabled)</option>
-                <option value="inactive">Inactive (Login Blocked)</option>
-              </select>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-slate-700">Name of Student *</label>
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="e.g. Muhammed Rashid P"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium focus:border-[#1E3A5F] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700">CIC Ad No</label>
+                <input
+                  type="text"
+                  value={cicAdNo}
+                  onChange={(e) => setCicAdNo(e.target.value)}
+                  placeholder="e.g. CIC-2026-091"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono focus:border-[#1E3A5F] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700">Clg Ad No (College Admission No) *</label>
+                <input
+                  type="text"
+                  required
+                  value={admissionNumber}
+                  onChange={(e) => {
+                    setAdmissionNumber(e.target.value);
+                    if (!clgAdNo) setClgAdNo(e.target.value);
+                  }}
+                  placeholder="e.g. KKHM2605"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono font-semibold focus:border-[#1E3A5F] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700">Class / Department *</label>
+                <input
+                  type="text"
+                  required
+                  value={batchName}
+                  onChange={(e) => setBatchName(e.target.value)}
+                  placeholder="e.g. Degree 1st Year"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#1E3A5F] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700">Academic Year</label>
+                <input
+                  type="text"
+                  value={academicYearText}
+                  onChange={(e) => setAcademicYearText(e.target.value)}
+                  placeholder="e.g. 2026-27"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono focus:border-[#1E3A5F] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700">Semester</label>
+                <input
+                  type="text"
+                  value={semesterText}
+                  onChange={(e) => setSemesterText(e.target.value)}
+                  placeholder="e.g. Semester 1"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#1E3A5F] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700">Semester Session</label>
+                <div className="mt-1 flex items-center gap-4 py-1.5">
+                  <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800">
+                    <input
+                      type="radio"
+                      name="semesterSession"
+                      checked={semesterPeriod === 'Nov'}
+                      onChange={() => setSemesterPeriod('Nov')}
+                      className="text-[#1E3A5F] focus:ring-[#1E3A5F]"
+                    />
+                    Nov Session
+                  </label>
+                  <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800">
+                    <input
+                      type="radio"
+                      name="semesterSession"
+                      checked={semesterPeriod === 'May'}
+                      onChange={() => setSemesterPeriod('May')}
+                      className="text-[#1E3A5F] focus:ring-[#1E3A5F]"
+                    />
+                    May Session
+                  </label>
+                </div>
+              </div>
+
+              <div className="sm:col-span-2 md:col-span-3">
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Course Stream *</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+                  {[
+                    'Wafy',
+                    'Wafy Arts',
+                    'Wafiyya',
+                    'Wafiyya Day',
+                    'Wafiyya Arts',
+                    'Wafiyya Distance',
+                  ].map((stream) => (
+                    <button
+                      key={stream}
+                      type="button"
+                      onClick={() => setCourseStream(stream)}
+                      className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all text-center cursor-pointer ${
+                        courseStream.toLowerCase() === stream.toLowerCase()
+                          ? 'border-[#1E3A5F] bg-[#1E3A5F] text-white shadow-sm'
+                          : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+                      }`}
+                    >
+                      {courseStream.toLowerCase() === stream.toLowerCase() ? '✓ ' : ''}{stream}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="sm:col-span-2 md:col-span-3">
+                <label className="block text-xs font-semibold text-slate-700">College Affl. &amp; Name</label>
+                <input
+                  type="text"
+                  value={collegeName}
+                  onChange={(e) => setCollegeName(e.target.value)}
+                  placeholder="e.g. KKHM Islamic & Arts College"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#1E3A5F] focus:outline-none"
+                />
+              </div>
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-200">
-            <div className="text-xs font-semibold text-slate-900 mb-3">
-              Login Credentials (Admin Controlled)
+          {/* Section 2: Subject Details */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+            <div className="border-b border-slate-200 pb-2 mb-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[#1E3A5F]">
+                2. Subject &amp; Off-Course Research Details
+              </h4>
+              <p className="text-[11px] text-slate-500">Proposal application, credit weight, assigned guide and reference text</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
+              <div className="sm:col-span-2 md:col-span-3">
+                <label className="block text-xs font-semibold text-slate-700">Subject Title</label>
+                <input
+                  type="text"
+                  value={subjectTitle}
+                  onChange={(e) => setSubjectTitle(e.target.value)}
+                  placeholder="e.g. Tafsir Studies & Arabic Grammar Analysis"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#1E3A5F] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700">
+                  Off Course Proposal Application Number
+                </label>
+                <input
+                  type="text"
+                  value={proposalAppNo}
+                  onChange={(e) => setProposalAppNo(e.target.value)}
+                  placeholder="e.g. PROP-2026-042"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono focus:border-[#1E3A5F] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700">Credit</label>
+                <input
+                  type="text"
+                  value={courseCredit}
+                  onChange={(e) => setCourseCredit(e.target.value)}
+                  placeholder="e.g. 4"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono focus:border-[#1E3A5F] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700">Name of Guide</label>
+                <input
+                  type="text"
+                  value={guideName}
+                  onChange={(e) => setGuideName(e.target.value)}
+                  placeholder="e.g. Usthad Rashid Ali"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#1E3A5F] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700">Phone Number</label>
+                <input
+                  type="text"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="e.g. +91 98470 50101"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#1E3A5F] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700">Whatsapp Number</label>
+                <input
+                  type="text"
+                  value={whatsappNumber}
+                  onChange={(e) => setWhatsappNumber(e.target.value)}
+                  placeholder="e.g. +91 98470 50101"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#1E3A5F] focus:outline-none"
+                />
+              </div>
+
+              <div className="sm:col-span-2 md:col-span-3">
+                <label className="block text-xs font-semibold text-slate-700">Reference</label>
+                <textarea
+                  rows={2}
+                  value={referenceNotes}
+                  onChange={(e) => setReferenceNotes(e.target.value)}
+                  placeholder="e.g. Al-Jami li-Ahkam al-Quran by Imam al-Qurtubi, vol. 3, Cairo edition."
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs focus:border-[#1E3A5F] focus:outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Login Credentials & System Access (Admin Managed) */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+            <div className="border-b border-slate-200 pb-2 mb-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[#1E3A5F]">
+                3. System Login Access (Admin Controlled)
+              </h4>
+              <p className="text-[11px] text-slate-500">Student login username, password credentials and active status</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
               <div>
                 <label className="block text-xs font-semibold text-slate-700">Login Username *</label>
                 <input
@@ -623,22 +925,47 @@ export const StudentsModule: React.FC = () => {
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="e.g. student7"
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono focus:border-[#1E3A5F] focus:outline-none"
+                  placeholder="e.g. kkhm2605"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono focus:border-[#1E3A5F] focus:outline-none"
                 />
               </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700">
-                  {editingId ? 'Reset Password (leave blank to keep current)' : 'Initial Password * (min 6 chars)'}
+                  {editingId ? 'Reset Password (optional)' : 'Initial Password * (min 6 chars)'}
                 </label>
                 <input
                   type="text"
                   required={!editingId}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder={editingId ? 'Enter new password to reset' : 'e.g. Student@2026'}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono focus:border-[#1E3A5F] focus:outline-none"
+                  placeholder={editingId ? 'Leave blank to keep current' : 'e.g. Student@2026'}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono focus:border-[#1E3A5F] focus:outline-none"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700">Email Address *</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="student@kkhmcollege.edu.in"
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#1E3A5F] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700">Account Status</label>
+                <select
+                  value={isActive ? 'active' : 'inactive'}
+                  onChange={(e) => setIsActive(e.target.value === 'active')}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[#1E3A5F] focus:outline-none"
+                >
+                  <option value="active">Active (Login Enabled)</option>
+                  <option value="inactive">Inactive (Login Blocked)</option>
+                </select>
               </div>
             </div>
           </div>
@@ -654,9 +981,9 @@ export const StudentsModule: React.FC = () => {
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg bg-[#1E3A5F] px-4 py-2 text-sm font-semibold text-white hover:bg-[#162C49] disabled:opacity-60 cursor-pointer"
+              className="rounded-lg bg-[#1E3A5F] px-5 py-2 text-sm font-semibold text-white hover:bg-[#162C49] disabled:opacity-60 cursor-pointer shadow-sm"
             >
-              {saving ? 'Saving...' : editingId ? 'Save Changes' : 'Create Student'}
+              {saving ? 'Saving...' : editingId ? 'Save Student Changes' : 'Register Student'}
             </button>
           </div>
         </form>
@@ -675,10 +1002,10 @@ export const StudentsModule: React.FC = () => {
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="min-w-0">
               <div className="text-xs font-bold text-slate-900">
-                Step 1 · Download Ready Excel Template
+                Step 1 · Download Official CIC-Formatted Template
               </div>
               <p className="mt-1 text-xs text-slate-600 leading-relaxed">
-                Includes formatted headers (<code className="font-mono">Full Name, Admission Number, Class / Batch, Email, Phone, Username, Password</code>), sample rows, and an Instructions sheet.
+                Includes all 18 official CIC fields: <code className="font-mono">Name of Student, CIC Ad No, Clg Ad No, Class / Department, Academic Year, Semester, Session (Nov/May), Course Stream (Wafy/Wafiyya), College Name, Subject Title, Proposal App No, Credit, Guide Name, Phone, Whatsapp, Reference, Username, Password</code>, sample data and an Instructions guide.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -799,14 +1126,15 @@ export const StudentsModule: React.FC = () => {
                   </strong>
                 </span>
               </div>
-              <div className="max-h-56 overflow-auto">
+              <div className="max-h-64 overflow-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-white text-slate-500 border-b border-slate-200 sticky top-0">
                     <tr>
                       <th className="px-3 py-2 font-semibold">Row</th>
                       <th className="px-3 py-2 font-semibold">Full Name</th>
-                      <th className="px-3 py-2 font-semibold">Admission No.</th>
-                      <th className="px-3 py-2 font-semibold">Class / Batch</th>
+                      <th className="px-3 py-2 font-semibold">CIC / Clg Ad No</th>
+                      <th className="px-3 py-2 font-semibold">Stream</th>
+                      <th className="px-3 py-2 font-semibold">Subject Title</th>
                       <th className="px-3 py-2 font-semibold">Username</th>
                       <th className="px-3 py-2 font-semibold">Validation</th>
                     </tr>
@@ -817,9 +1145,17 @@ export const StudentsModule: React.FC = () => {
                         <td className="px-3 py-2 font-mono text-slate-500">{r.rowNumber}</td>
                         <td className="px-3 py-2 font-medium text-slate-900">{r.full_name || '—'}</td>
                         <td className="px-3 py-2 font-mono text-slate-700">
-                          {r.admission_number || '—'}
+                          <div>{r.admission_number || '—'}</div>
+                          {r.cic_ad_no && <div className="text-[10px] text-slate-400">CIC: {r.cic_ad_no}</div>}
                         </td>
-                        <td className="px-3 py-2 text-slate-600">{r.batch_name || 'Default'}</td>
+                        <td className="px-3 py-2 text-slate-700">
+                          <span className="inline-block rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium">
+                            {r.course_stream || 'Wafy'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-slate-800 max-w-[200px] truncate" title={r.subject_title || ''}>
+                          {r.subject_title || '—'}
+                        </td>
                         <td className="px-3 py-2 font-mono text-slate-700">
                           {r.username ? `@${r.username}` : '—'}
                         </td>
@@ -911,18 +1247,206 @@ export const StudentsModule: React.FC = () => {
             </div>
 
             {profileTab === 'overview' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                <div className="rounded-lg border border-slate-200 p-4 space-y-2">
-                  <div><span className="text-slate-500">Full Name:</span> <strong>{viewedRow.fullName}</strong></div>
-                  <div><span className="text-slate-500">Admission Number:</span> <strong className="font-mono">{viewedRow.admissionNumber}</strong></div>
-                  <div><span className="text-slate-500">Class / Batch:</span> <strong>{viewedRow.batchName}</strong></div>
-                  <div><span className="text-slate-500">Assigned Mentor ({activeYear.name}):</span> <strong>{viewedRow.mentorName}</strong></div>
-                </div>
-                <div className="rounded-lg border border-slate-200 p-4 space-y-2">
-                  <div><span className="text-slate-500">Login Username:</span> <strong className="font-mono">@{viewedRow.username}</strong></div>
-                  <div><span className="text-slate-500">Email:</span> <strong>{viewedRow.email}</strong></div>
-                  <div><span className="text-slate-500">Phone:</span> <strong>{viewedRow.phone || '—'}</strong></div>
-                  <div className="flex items-center gap-2"><span className="text-slate-500">Status:</span> <StatusLabel status={viewedRow.isActive ? 'active' : 'inactive'} /></div>
+              <div className="space-y-4 text-xs">
+                {/* Official Coordination of Islamic Colleges (CIC) Form Card */}
+                <div className="rounded-xl border border-slate-300 bg-white shadow-sm overflow-hidden">
+                  <div className="bg-[#1E3A5F] text-white p-4 text-center">
+                    <div className="text-sm font-bold tracking-wide uppercase">
+                      Coordination of Islamic Colleges CIC
+                    </div>
+                    <div className="text-[11px] text-slate-200 mt-0.5">
+                      Executive Member, Islamic Universities League · ISO 9001:2015 Certified
+                    </div>
+                    <div className="inline-block mt-2 rounded bg-amber-400/20 px-3 py-0.5 text-xs font-semibold text-amber-200 border border-amber-300/30">
+                      OFF-COURSE ACADEMIC REGISTRATION FORM
+                    </div>
+                  </div>
+
+                  <div className="p-4 space-y-4">
+                    {/* Student & Institutional Details Table matching the physical form */}
+                    <div className="border border-slate-300 rounded-lg overflow-hidden">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <tbody>
+                          <tr className="border-b border-slate-200">
+                            <td className="w-44 bg-slate-50 px-3.5 py-2 font-semibold text-slate-700 border-r border-slate-200">
+                              Name of Student
+                            </td>
+                            <td colSpan={3} className="px-3.5 py-2 font-bold text-slate-900 text-sm">
+                              {viewedRow.fullName}
+                            </td>
+                          </tr>
+                          <tr className="border-b border-slate-200">
+                            <td className="bg-slate-50 px-3.5 py-2 font-semibold text-slate-700 border-r border-slate-200">
+                              CIC Ad No
+                            </td>
+                            <td className="px-3.5 py-2 font-mono font-medium text-slate-800 border-r border-slate-200">
+                              {viewedRow.cicAdNo || '—'}
+                            </td>
+                            <td className="w-32 bg-slate-50 px-3.5 py-2 font-semibold text-slate-700 border-r border-slate-200">
+                              Clg Ad No:
+                            </td>
+                            <td className="px-3.5 py-2 font-mono font-bold text-slate-900">
+                              {viewedRow.clgAdNo || viewedRow.admissionNumber}
+                            </td>
+                          </tr>
+                          <tr className="border-b border-slate-200">
+                            <td className="bg-slate-50 px-3.5 py-2 font-semibold text-slate-700 border-r border-slate-200">
+                              Class / Department
+                            </td>
+                            <td colSpan={3} className="px-3.5 py-2 text-slate-800 font-medium">
+                              {viewedRow.batchName}
+                            </td>
+                          </tr>
+                          <tr className="border-b border-slate-200">
+                            <td className="bg-slate-50 px-3.5 py-2 font-semibold text-slate-700 border-r border-slate-200">
+                              Academic Year
+                            </td>
+                            <td className="px-3.5 py-2 font-medium text-slate-800 border-r border-slate-200">
+                              {viewedRow.academicYearText || activeYear.name}
+                            </td>
+                            <td className="bg-slate-50 px-3.5 py-2 font-semibold text-slate-700 border-r border-slate-200">
+                              Semester &amp; Session
+                            </td>
+                            <td className="px-3.5 py-2">
+                              <span className="font-semibold text-slate-900 mr-2">{viewedRow.semesterText || 'Semester 1'}</span>
+                              <span
+                                className={`inline-block rounded px-2 py-0.5 text-[11px] font-bold ${
+                                  viewedRow.semesterPeriod === 'May'
+                                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                    : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                }`}
+                              >
+                                {viewedRow.semesterPeriod || 'Nov'} Session
+                              </span>
+                            </td>
+                          </tr>
+                          <tr className="border-b border-slate-200">
+                            <td className="bg-slate-50 px-3.5 py-2 font-semibold text-slate-700 border-r border-slate-200">
+                              Course Stream
+                            </td>
+                            <td colSpan={3} className="px-3.5 py-2">
+                              <div className="flex flex-wrap gap-2">
+                                {[
+                                  'Wafy',
+                                  'Wafy Arts',
+                                  'Wafiyya',
+                                  'Wafiyya Day',
+                                  'Wafiyya Arts',
+                                  'Wafiyya Distance',
+                                ].map((st) => {
+                                  const isSelected =
+                                    (viewedRow.courseStream || 'Wafy').toLowerCase() === st.toLowerCase();
+                                  return (
+                                    <span
+                                      key={st}
+                                      className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold ${
+                                        isSelected
+                                          ? 'bg-[#1E3A5F] text-white shadow-xs'
+                                          : 'bg-slate-100 text-slate-400'
+                                      }`}
+                                    >
+                                      {isSelected ? '✓ ' : '□ '}
+                                      {st}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="bg-slate-50 px-3.5 py-2 font-semibold text-slate-700 border-r border-slate-200">
+                              College Affl. &amp; Name
+                            </td>
+                            <td colSpan={3} className="px-3.5 py-2 text-slate-800 font-medium">
+                              {viewedRow.collegeName || 'KKHM Islamic & Arts College'}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Subject Details Table matching the physical form */}
+                    <div className="border border-slate-300 rounded-lg overflow-hidden">
+                      <div className="bg-slate-100 px-3 py-2 font-bold text-slate-800 text-xs border-b border-slate-300 uppercase tracking-wider text-center">
+                        Subject Details
+                      </div>
+                      <table className="w-full text-left text-xs border-collapse">
+                        <tbody>
+                          <tr className="border-b border-slate-200">
+                            <td className="w-44 bg-slate-50 px-3.5 py-2 font-semibold text-slate-700 border-r border-slate-200">
+                              Title
+                            </td>
+                            <td colSpan={3} className="px-3.5 py-2 font-bold text-slate-900">
+                              {viewedRow.subjectTitle || '—'}
+                            </td>
+                          </tr>
+                          <tr className="border-b border-slate-200">
+                            <td className="bg-slate-50 px-3.5 py-2 font-semibold text-slate-700 border-r border-slate-200">
+                              Off Course Proposal Application Number
+                            </td>
+                            <td className="px-3.5 py-2 font-mono font-medium text-slate-800 border-r border-slate-200">
+                              {viewedRow.proposalAppNo || '—'}
+                            </td>
+                            <td className="w-24 bg-slate-50 px-3.5 py-2 font-semibold text-slate-700 border-r border-slate-200">
+                              Credit
+                            </td>
+                            <td className="px-3.5 py-2 font-bold text-slate-900">
+                              {viewedRow.courseCredit || '4'}
+                            </td>
+                          </tr>
+                          <tr className="border-b border-slate-200">
+                            <td className="bg-slate-50 px-3.5 py-2 font-semibold text-slate-700 border-r border-slate-200">
+                              Name of Guide
+                            </td>
+                            <td colSpan={3} className="px-3.5 py-2 font-semibold text-slate-800">
+                              {viewedRow.guideName || viewedRow.mentorName || '—'}
+                            </td>
+                          </tr>
+                          <tr className="border-b border-slate-200">
+                            <td className="bg-slate-50 px-3.5 py-2 font-semibold text-slate-700 border-r border-slate-200">
+                              Phone Number
+                            </td>
+                            <td className="px-3.5 py-2 font-mono text-slate-700 border-r border-slate-200">
+                              {viewedRow.phone || '—'}
+                            </td>
+                            <td className="bg-slate-50 px-3.5 py-2 font-semibold text-slate-700 border-r border-slate-200">
+                              Whatsapp Number
+                            </td>
+                            <td className="px-3.5 py-2 font-mono text-slate-700">
+                              {viewedRow.whatsappNumber || viewedRow.phone || '—'}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="bg-slate-50 px-3.5 py-2 font-semibold text-slate-700 border-r border-slate-200 align-top">
+                              Reference
+                            </td>
+                            <td colSpan={3} className="px-3.5 py-2 text-slate-800 whitespace-pre-wrap">
+                              {viewedRow.referenceNotes || '—'}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Login & Account Information */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="rounded-lg border border-slate-200 p-3 space-y-1.5 bg-slate-50/50">
+                        <div className="font-semibold text-slate-800 text-[11px] mb-1">Account &amp; Login Details</div>
+                        <div><span className="text-slate-500">Username:</span> <strong className="font-mono">@{viewedRow.username}</strong></div>
+                        <div><span className="text-slate-500">Email:</span> <strong>{viewedRow.email}</strong></div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-500">Status:</span>
+                          <StatusLabel status={viewedRow.isActive ? 'active' : 'inactive'} />
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 p-3 space-y-1.5 bg-slate-50/50">
+                        <div className="font-semibold text-slate-800 text-[11px] mb-1">Academic Mentorship</div>
+                        <div><span className="text-slate-500">Assigned Mentor:</span> <strong>{viewedRow.mentorName}</strong></div>
+                        <div><span className="text-slate-500">Academic Year:</span> <strong>{activeYear.name}</strong></div>
+                        <div><span className="text-slate-500">Enrolled:</span> <strong>{viewedRow.enrolledInActiveYear ? 'Yes (Active)' : 'Pending'}</strong></div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
