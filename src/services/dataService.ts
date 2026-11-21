@@ -5,6 +5,7 @@ import {
   getEffectiveDaySlots,
   getTodayIST,
 } from '../lib/dateUtils';
+import { hashPassword } from '../lib/cryptoUtils';
 import { getSupabaseClient, isSupabaseConfigured, setSupabaseSessionToken } from '../lib/supabase';
 import type {
   AcademicCalendarException,
@@ -41,14 +42,39 @@ function uid(prefix: string): string {
  * - Isolated Sandbox Preview Mode (when Supabase credentials are not yet configured):
  *   Runs complete relational business logic in-memory with zero fake "connected" claims.
  */
+const SANDBOX_STORAGE_KEY = 'kkhm_ams_sandbox_store_v1';
+
 class DataService {
   private sandboxDb: DatabaseSnapshot | null = null;
 
   private getSandbox(): DatabaseSnapshot {
     if (!this.sandboxDb) {
-      this.sandboxDb = createIsolatedSandboxSeed();
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          const cached = window.localStorage.getItem(SANDBOX_STORAGE_KEY);
+          if (cached) {
+            this.sandboxDb = JSON.parse(cached);
+          }
+        } catch {
+          // Ignore cache parse failures
+        }
+      }
+      if (!this.sandboxDb) {
+        this.sandboxDb = createIsolatedSandboxSeed();
+        this.saveSandbox();
+      }
     }
     return this.sandboxDb;
+  }
+
+  private saveSandbox(): void {
+    if (this.sandboxDb && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(SANDBOX_STORAGE_KEY, JSON.stringify(this.sandboxDb));
+      } catch {
+        // Handle storage quota limits gracefully
+      }
+    }
   }
 
   public isProductionSupabase(): boolean {
@@ -199,7 +225,12 @@ class DataService {
     if (!profile.is_active) {
       throw new Error('This account has been deactivated by the administrator.');
     }
-    if (profile.password_sandbox !== password) {
+    const inputHash = await hashPassword(password);
+    const passwordMatches =
+      (profile.password_hash_sandbox && profile.password_hash_sandbox === inputHash) ||
+      (profile.password_sandbox && profile.password_sandbox === password);
+
+    if (!passwordMatches) {
       throw new Error('Invalid username/email or password.');
     }
 
@@ -502,6 +533,7 @@ class DataService {
     const now = new Date().toISOString();
     const profId = uid('prof-stu');
     const stuId = uid('stu');
+    const pwdHash = await hashPassword(payload.password);
 
     db.profiles.push({
       id: profId,
@@ -510,7 +542,7 @@ class DataService {
       username: payload.username.trim(),
       email: payload.email.trim(),
       phone: payload.phone?.trim(),
-      password_sandbox: payload.password,
+      password_hash_sandbox: pwdHash,
       is_active: payload.is_active ?? true,
       created_at: now,
       updated_at: now,
@@ -765,6 +797,7 @@ class DataService {
     const now = new Date().toISOString();
     const profId = uid('prof-mentor');
     const mentorId = uid('mentor');
+    const pwdHash = await hashPassword(payload.password);
     db.profiles.push({
       id: profId,
       role: 'mentor',
@@ -772,7 +805,7 @@ class DataService {
       username: payload.username.trim(),
       email: payload.email.trim(),
       phone: payload.phone?.trim(),
-      password_sandbox: payload.password,
+      password_hash_sandbox: pwdHash,
       is_active: payload.is_active ?? true,
       created_at: now,
       updated_at: now,
@@ -918,7 +951,9 @@ class DataService {
     }
     target.username = newUsername.trim();
     if (newPassword && newPassword.trim().length >= 6) {
-      target.password_sandbox = newPassword.trim();
+      target.password_hash_sandbox = await hashPassword(newPassword.trim());
+      target.password_sandbox = undefined;
+      target.is_temporary_password = false;
     }
     if (typeof isActive === 'boolean') {
       target.is_active = isActive;
@@ -929,6 +964,7 @@ class DataService {
       password_updated: Boolean(newPassword?.trim()),
       is_active: target.is_active,
     });
+    this.saveSandbox();
   }
 
   // ==================== MENTOR ASSIGNMENTS (YEAR-SCOPED, HISTORICAL PRESERVATION) ====================

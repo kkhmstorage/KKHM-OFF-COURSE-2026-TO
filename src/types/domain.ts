@@ -40,6 +40,10 @@ export interface Profile {
   phone?: string;
   /** Only used inside isolated local sandbox mode; in Supabase production mode passwords live hashed inside PostgreSQL */
   password_sandbox?: string;
+  /** Secure SHA-256 hash used in sandbox mode so plaintext passwords are never stored in client code */
+  password_hash_sandbox?: string;
+  /** Flags temporary first-login setup */
+  is_temporary_password?: boolean;
   is_active: boolean;
   last_login_at?: string;
   created_at: string;

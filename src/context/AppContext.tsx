@@ -129,7 +129,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setSession(authSession);
       setActiveRoute('dashboard');
       setRoutePayload({});
-      if (authSession.profile.role === 'admin' && password === '1111') {
+      if (
+        authSession.profile.role === 'admin' &&
+        (authSession.profile.is_temporary_password || password === '1111')
+      ) {
         setRequiresAdminCredentialSetup(true);
       } else {
         setRequiresAdminCredentialSetup(false);
@@ -137,7 +140,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const serialized = JSON.stringify({
           token: authSession.token,
-          profile: { ...authSession.profile, password_sandbox: undefined },
+          profile: {
+            ...authSession.profile,
+            password_sandbox: undefined,
+            password_hash_sandbox: undefined,
+          },
           student: authSession.student,
           mentor: authSession.mentor,
         });

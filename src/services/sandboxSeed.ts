@@ -1,4 +1,5 @@
 import { addDays, getDefaultPeriodTimings, getTodayIST, getDayOfWeekISO } from '../lib/dateUtils';
+import { SEED_PASSWORD_HASHES } from '../lib/cryptoUtils';
 import type {
   AcademicCalendarException,
   AcademicYear,
@@ -119,15 +120,21 @@ export function createIsolatedSandboxSeed(): DatabaseSnapshot {
     },
   ];
 
+  const envAdminUser =
+    (typeof process !== 'undefined' && process.env?.VITE_ADMIN_USERNAME) ||
+    (import.meta as unknown as { env?: Record<string, string | undefined> })?.env?.VITE_ADMIN_USERNAME;
+  const initialAdminUsername = envAdminUser?.trim() || 'kkhmoffcourse';
+
   const profiles: Profile[] = [
     {
       id: 'prof-admin-1',
       role: 'admin',
       full_name: 'Dr. Abdul Rahiman K',
-      username: 'kkhmoffcourse',
+      username: initialAdminUsername,
       email: 'admin@kkhmcollege.edu.in',
       phone: '+91 98470 10101',
-      password_sandbox: '1111',
+      password_hash_sandbox: SEED_PASSWORD_HASHES.ADMIN_INITIAL,
+      is_temporary_password: true,
       is_active: true,
       created_at: '2024-06-01T04:00:00Z',
       updated_at: now,
@@ -139,7 +146,7 @@ export function createIsolatedSandboxSeed(): DatabaseSnapshot {
       username: 'mentor1',
       email: 'rashid.mentor@kkhmcollege.edu.in',
       phone: '+91 98470 20201',
-      password_sandbox: 'Mentor@2026',
+      password_hash_sandbox: SEED_PASSWORD_HASHES.MENTOR_DEFAULT,
       is_active: true,
       last_login_at: now,
       created_at: '2024-06-01T04:00:00Z',
@@ -152,7 +159,7 @@ export function createIsolatedSandboxSeed(): DatabaseSnapshot {
       username: 'mentor2',
       email: 'basheer.mentor@kkhmcollege.edu.in',
       phone: '+91 98470 20202',
-      password_sandbox: 'Mentor@2026',
+      password_hash_sandbox: SEED_PASSWORD_HASHES.MENTOR_DEFAULT,
       is_active: true,
       last_login_at: now,
       created_at: '2024-06-01T04:00:00Z',
@@ -165,7 +172,7 @@ export function createIsolatedSandboxSeed(): DatabaseSnapshot {
       username: 'mentor3',
       email: 'salman.mentor@kkhmcollege.edu.in',
       phone: '+91 98470 20203',
-      password_sandbox: 'Mentor@2026',
+      password_hash_sandbox: SEED_PASSWORD_HASHES.MENTOR_DEFAULT,
       is_active: true,
       created_at: '2025-06-01T04:00:00Z',
       updated_at: now,
@@ -177,7 +184,7 @@ export function createIsolatedSandboxSeed(): DatabaseSnapshot {
       username: 'student1',
       email: 'ashiq.2401@kkhmcollege.edu.in',
       phone: '+91 97450 30101',
-      password_sandbox: 'Student@2026',
+      password_hash_sandbox: SEED_PASSWORD_HASHES.STUDENT_DEFAULT,
       is_active: true,
       last_login_at: now,
       created_at: '2024-06-01T04:00:00Z',
@@ -190,7 +197,7 @@ export function createIsolatedSandboxSeed(): DatabaseSnapshot {
       username: 'student2',
       email: 'ameen.2402@kkhmcollege.edu.in',
       phone: '+91 97450 30102',
-      password_sandbox: 'Student@2026',
+      password_hash_sandbox: SEED_PASSWORD_HASHES.STUDENT_DEFAULT,
       is_active: true,
       created_at: '2024-06-01T04:00:00Z',
       updated_at: now,
@@ -202,7 +209,7 @@ export function createIsolatedSandboxSeed(): DatabaseSnapshot {
       username: 'student3',
       email: 'fadhil.2501@kkhmcollege.edu.in',
       phone: '+91 97450 30103',
-      password_sandbox: 'Student@2026',
+      password_hash_sandbox: SEED_PASSWORD_HASHES.STUDENT_DEFAULT,
       is_active: true,
       created_at: '2025-06-01T04:00:00Z',
       updated_at: now,
@@ -214,7 +221,7 @@ export function createIsolatedSandboxSeed(): DatabaseSnapshot {
       username: 'student4',
       email: 'hisham.2502@kkhmcollege.edu.in',
       phone: '+91 97450 30104',
-      password_sandbox: 'Student@2026',
+      password_hash_sandbox: SEED_PASSWORD_HASHES.STUDENT_DEFAULT,
       is_active: true,
       created_at: '2025-06-01T04:00:00Z',
       updated_at: now,
@@ -226,7 +233,7 @@ export function createIsolatedSandboxSeed(): DatabaseSnapshot {
       username: 'student5',
       email: 'nihal.2601@kkhmcollege.edu.in',
       phone: '+91 97450 30105',
-      password_sandbox: 'Student@2026',
+      password_hash_sandbox: SEED_PASSWORD_HASHES.STUDENT_DEFAULT,
       is_active: true,
       created_at: '2026-06-01T04:00:00Z',
       updated_at: now,
@@ -238,7 +245,7 @@ export function createIsolatedSandboxSeed(): DatabaseSnapshot {
       username: 'student6',
       email: 'shamil.2602@kkhmcollege.edu.in',
       phone: '+91 97450 30106',
-      password_sandbox: 'Student@2026',
+      password_hash_sandbox: SEED_PASSWORD_HASHES.STUDENT_DEFAULT,
       is_active: true,
       created_at: '2026-06-01T04:00:00Z',
       updated_at: now,
