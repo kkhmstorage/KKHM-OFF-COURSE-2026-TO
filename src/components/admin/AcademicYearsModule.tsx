@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Check, Lock, Plus, Unlock } from 'lucide-react';
+import { Check, Lock, Plus, Trash2, Unlock } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { formatDisplayDate } from '../../lib/dateUtils';
 import { dataService } from '../../services/dataService';
-import type { WorkflowMode } from '../../types/domain';
+import type { AcademicYear, WorkflowMode } from '../../types/domain';
 import { Modal, PageHeader, StatusLabel } from '../ui/CommonUI';
 
 export const AcademicYearsModule: React.FC = () => {
@@ -73,6 +73,28 @@ export const AcademicYearsModule: React.FC = () => {
         await dataService.toggleAcademicYearStatus(session.profile, yearId, nextStatus);
         await refresh();
         notify('success', `Academic year ${yearName} is now ${nextStatus}.`);
+      },
+    });
+  };
+
+  const handleDeleteAcademicYear = (year: AcademicYear) => {
+    if (activeYear?.id === year.id) {
+      notify('error', 'Cannot delete the currently active academic year. Switch to another active year first.');
+      return;
+    }
+    confirmAction({
+      title: `Delete Academic Year "${year.name}"?`,
+      description: `Are you sure you want to permanently delete academic year "${year.name}"? All associated settings, enrollments, reports, and timetables for this year will be permanently deleted. This action cannot be undone.`,
+      confirmLabel: 'Delete Academic Year',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await dataService.deleteAcademicYear(session.profile, year.id);
+          await refresh();
+          notify('success', `Academic year "${year.name}" was permanently deleted.`);
+        } catch (err) {
+          notify('error', err instanceof Error ? err.message : 'Unable to delete academic year.');
+        }
       },
     });
   };
@@ -182,6 +204,16 @@ export const AcademicYearsModule: React.FC = () => {
                             </>
                           )}
                         </button>
+                        {!isSelected && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAcademicYear(y)}
+                            className="rounded-md border border-red-200 p-1.5 text-red-600 hover:bg-red-50 hover:text-red-700 cursor-pointer"
+                            title={`Delete ${y.name}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

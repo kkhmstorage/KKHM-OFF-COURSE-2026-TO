@@ -178,7 +178,7 @@ CREATE TABLE IF NOT EXISTS public.semesters (
 -- 10. subjects
 CREATE TABLE IF NOT EXISTS public.subjects (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code TEXT NOT NULL UNIQUE,
+  code TEXT NOT NULL,
   name TEXT NOT NULL,
   category TEXT NOT NULL DEFAULT 'Core',
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -212,14 +212,14 @@ CREATE TABLE IF NOT EXISTS public.student_subject_selections (
 CREATE TABLE IF NOT EXISTS public.timetable_templates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   academic_year_id UUID NOT NULL REFERENCES public.academic_years(id) ON DELETE CASCADE,
+  semester_id UUID REFERENCES public.semesters(id) ON DELETE SET NULL,
   name TEXT NOT NULL,
   description TEXT,
   is_published BOOLEAN NOT NULL DEFAULT FALSE,
   revision INTEGER NOT NULL DEFAULT 1,
   published_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (academic_year_id, name)
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 14. timetable_slots
@@ -952,3 +952,12 @@ GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
+
+-- ==============================================================================
+-- Migration 006: Duplicate Subject Codes & Semester-aware Timetables
+-- ==============================================================================
+ALTER TABLE public.subjects DROP CONSTRAINT IF EXISTS subjects_code_key;
+DROP INDEX IF EXISTS subjects_code_key;
+
+ALTER TABLE public.timetable_templates ADD COLUMN IF NOT EXISTS semester_id UUID REFERENCES public.semesters(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_timetable_templates_semester_id ON public.timetable_templates(semester_id);

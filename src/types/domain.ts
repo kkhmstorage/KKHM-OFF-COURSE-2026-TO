@@ -209,6 +209,7 @@ export interface StudentSubjectSelection {
 export interface TimetableTemplate {
   id: string;
   academic_year_id: string;
+  semester_id?: string;
   name: string;
   description?: string;
   is_published: boolean;

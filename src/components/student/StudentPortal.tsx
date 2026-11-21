@@ -43,16 +43,67 @@ function useStudentScope() {
     const mentor = db.mentors.find((m) => m.id === mentorAssign?.mentor_id);
     const mentorProfile = db.profiles.find((p) => p.id === mentor?.profile_id);
 
-    const activeSemester =
+    const studentSemText = (student.semester_text || '').trim();
+
+    // Match student's assigned semester from CIC fields or active semester
+    const studentSemester =
+      (studentSemText &&
+        db.semesters.find(
+          (s) =>
+            s.academic_year_id === yearId &&
+            (s.name.toLowerCase() === studentSemText.toLowerCase() ||
+              s.name.toLowerCase().includes(studentSemText.toLowerCase()) ||
+              s.name.toLowerCase().replace(/[^a-z0-9]/g, '') === studentSemText.toLowerCase().replace(/[^a-z0-9]/g, ''))
+        )) ||
       db.semesters.find((s) => s.academic_year_id === yearId && s.status === 'active') ||
       db.semesters.find((s) => s.academic_year_id === yearId);
 
+    const activeSemester = studentSemester ||
+      db.semesters.find((s) => s.academic_year_id === yearId && s.status === 'active') ||
+      db.semesters.find((s) => s.academic_year_id === yearId);
+
+    // Explicit student-level assignment
     const ttAssign = db.student_timetable_assignments.find(
       (a) => a.student_id === student.id && a.academic_year_id === yearId && a.is_active
     );
-    const template = db.timetable_templates.find((t) => t.id === ttAssign?.template_id);
-    const templateSlots = ttAssign
-      ? db.timetable_slots.filter((s) => s.template_id === ttAssign.template_id)
+
+    // Timetable template resolution:
+    // 1. Explicit assignment
+    // 2. Semester-specific timetable matching student's enrolled semester
+    // 3. Template name containing student semester
+    // 4. Default active published template
+    const template =
+      (ttAssign && db.timetable_templates.find((t) => t.id === ttAssign.template_id)) ||
+      (studentSemester &&
+        db.timetable_templates.find(
+          (t) =>
+            t.academic_year_id === yearId &&
+            t.is_published &&
+            t.semester_id === studentSemester.id
+        )) ||
+      (studentSemester &&
+        db.timetable_templates.find(
+          (t) =>
+            t.academic_year_id === yearId &&
+            t.is_published &&
+            t.name.toLowerCase().includes(studentSemester.name.toLowerCase())
+        )) ||
+      (studentSemText &&
+        db.timetable_templates.find(
+          (t) =>
+            t.academic_year_id === yearId &&
+            t.is_published &&
+            t.name.toLowerCase().includes(studentSemText.toLowerCase())
+        )) ||
+      (studentSemester &&
+        db.timetable_templates.find(
+          (t) => t.academic_year_id === yearId && t.semester_id === studentSemester.id
+        )) ||
+      db.timetable_templates.find((t) => t.academic_year_id === yearId && t.is_published) ||
+      db.timetable_templates.find((t) => t.academic_year_id === yearId);
+
+    const templateSlots = template
+      ? db.timetable_slots.filter((s) => s.template_id === template.id)
       : [];
 
     const submissions = db.report_submissions
@@ -68,6 +119,7 @@ function useStudentScope() {
       enrollment,
       mentorProfile,
       activeSemester,
+      studentSemesterName: student.semester_text || studentSemester?.name || 'Semester',
       template,
       templateSlots,
       submissions,
@@ -305,10 +357,15 @@ export const StudentTimetableView: React.FC = () => {
         title="My Weekly Timetable"
         subtitle={
           scope.template
-            ? `${scope.template.name} (Revision ${scope.template.revision}) · ${activeYear.name}`
-            : `Academic Year ${activeYear.name}`
+            ? `${scope.template.name} · ${scope.studentSemesterName} · Academic Year ${activeYear.name}`
+            : `Academic Year ${activeYear.name} · ${scope.studentSemesterName}`
         }
       />
+      {scope.student.semester_text && (
+        <div className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-200 px-3 py-1 text-xs font-semibold text-indigo-700">
+          Enrolled Semester: {scope.student.semester_text}
+        </div>
+      )}
 
       {!scope.templateSlots.length ? (
         <EmptyState

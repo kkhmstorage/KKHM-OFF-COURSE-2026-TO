@@ -494,6 +494,39 @@ class DataService {
       yearId,
       { name: year.name, status }
     );
+    this.saveSandbox();
+  }
+
+  public async deleteAcademicYear(actor: Profile, yearId: string): Promise<void> {
+    this.assertAdmin(actor);
+    if (isSupabaseConfigured()) {
+      const sb = getSupabaseClient()!;
+      await sb.from('calendar_exceptions').delete().eq('academic_year_id', yearId);
+      await sb.from('timetable_templates').delete().eq('academic_year_id', yearId);
+      await sb.from('student_subject_selections').delete().eq('academic_year_id', yearId);
+      await sb.from('student_mentor_assignments').delete().eq('academic_year_id', yearId);
+      await sb.from('report_submissions').delete().eq('academic_year_id', yearId);
+      await sb.from('student_academic_enrollments').delete().eq('academic_year_id', yearId);
+      await sb.from('academic_year_settings').delete().eq('academic_year_id', yearId);
+      const { error } = await sb.from('academic_years').delete().eq('id', yearId);
+      if (error) throw new Error(error.message);
+      await this.logSupabaseAudit(actor, 'ACADEMIC_YEAR_DELETED', 'academic_year', yearId, {});
+      return;
+    }
+
+    const db = this.getSandbox();
+    const year = db.academic_years.find((y) => y.id === yearId);
+    if (!year) throw new Error('Academic year not found.');
+    db.academic_years = db.academic_years.filter((y) => y.id !== yearId);
+    db.academic_year_settings = db.academic_year_settings.filter((s) => s.academic_year_id !== yearId);
+    db.student_academic_enrollments = db.student_academic_enrollments.filter((e) => e.academic_year_id !== yearId);
+    db.report_submissions = db.report_submissions.filter((r) => r.academic_year_id !== yearId);
+    db.timetable_templates = db.timetable_templates.filter((t) => t.academic_year_id !== yearId);
+    db.calendar_exceptions = db.calendar_exceptions.filter((c) => c.academic_year_id !== yearId);
+    db.student_subject_selections = db.student_subject_selections.filter((s) => s.academic_year_id !== yearId);
+    db.student_mentor_assignments = db.student_mentor_assignments.filter((m) => m.academic_year_id !== yearId);
+    this.appendSandboxAudit(actor, 'ACADEMIC_YEAR_DELETED', 'academic_year', year.name, {});
+    this.saveSandbox();
   }
 
   // ==================== STUDENTS & MENTORS & CREDENTIALS ====================
@@ -1383,8 +1416,14 @@ class DataService {
       return;
     }
     const db = this.getSandbox();
-    if (db.subjects.some((s) => s.code.toLowerCase() === payload.code.trim().toLowerCase())) {
-      throw new Error(`Subject code "${payload.code}" already exists.`);
+    if (
+      db.subjects.some(
+        (s) =>
+          s.code.toLowerCase() === payload.code.trim().toLowerCase() &&
+          s.name.toLowerCase() === payload.name.trim().toLowerCase()
+      )
+    ) {
+      throw new Error(`Subject with code "${payload.code}" and name "${payload.name}" already exists.`);
     }
     db.subjects.push({
       ...payload,
@@ -1394,6 +1433,7 @@ class DataService {
       created_at: new Date().toISOString(),
     });
     this.appendSandboxAudit(actor, 'SUBJECT_CREATED', 'subject', payload.code, payload);
+    this.saveSandbox();
   }
 
   public async deleteSubject(actor: Profile, subjectId: string): Promise<void> {
@@ -1498,7 +1538,7 @@ class DataService {
 
   public async createTimetableTemplate(
     actor: Profile,
-    payload: { academic_year_id: string; name: string; description?: string }
+    payload: { academic_year_id: string; semester_id?: string; name: string; description?: string }
   ): Promise<string> {
     this.assertAdmin(actor);
     const now = new Date().toISOString();
@@ -1508,6 +1548,7 @@ class DataService {
         .from('timetable_templates')
         .insert({
           academic_year_id: payload.academic_year_id,
+          semester_id: payload.semester_id || null,
           name: payload.name.trim(),
           description: payload.description?.trim() || null,
           is_published: false,
@@ -1523,6 +1564,7 @@ class DataService {
     db.timetable_templates.push({
       id,
       academic_year_id: payload.academic_year_id,
+      semester_id: payload.semester_id,
       name: payload.name.trim(),
       description: payload.description?.trim(),
       is_published: false,
@@ -1612,6 +1654,29 @@ class DataService {
       templateId,
       { name: tpl.name, revision: tpl.revision }
     );
+    this.saveSandbox();
+  }
+
+  public async deleteTimetableTemplate(actor: Profile, templateId: string): Promise<void> {
+    this.assertAdmin(actor);
+    if (isSupabaseConfigured()) {
+      const sb = getSupabaseClient()!;
+      await sb.from('timetable_slots').delete().eq('template_id', templateId);
+      await sb.from('student_timetable_assignments').delete().eq('template_id', templateId);
+      const { error } = await sb.from('timetable_templates').delete().eq('id', templateId);
+      if (error) throw new Error(error.message);
+      await this.logSupabaseAudit(actor, 'TIMETABLE_DELETED', 'timetable_template', templateId, {});
+      return;
+    }
+
+    const db = this.getSandbox();
+    const tpl = db.timetable_templates.find((t) => t.id === templateId);
+    if (!tpl) throw new Error('Timetable template not found.');
+    db.timetable_templates = db.timetable_templates.filter((t) => t.id !== templateId);
+    db.timetable_slots = db.timetable_slots.filter((s) => s.template_id !== templateId);
+    db.student_timetable_assignments = db.student_timetable_assignments.filter((a) => a.template_id !== templateId);
+    this.appendSandboxAudit(actor, 'TIMETABLE_DELETED', 'timetable_template', tpl.name, {});
+    this.saveSandbox();
   }
 
   public async assignTimetableToStudents(

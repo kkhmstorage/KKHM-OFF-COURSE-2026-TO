@@ -1,8 +1,12 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const metaEnv = (import.meta as unknown as { env?: Record<string, string | undefined> })?.env;
-const rawUrl = metaEnv?.VITE_SUPABASE_URL?.trim() || '';
-const rawKey = metaEnv?.VITE_SUPABASE_ANON_KEY?.trim() || '';
+const rawUrl =
+  metaEnv?.VITE_SUPABASE_URL?.trim() ||
+  (typeof window !== 'undefined' ? localStorage.getItem('kkhm_supabase_url')?.trim() || '' : '');
+const rawKey =
+  metaEnv?.VITE_SUPABASE_ANON_KEY?.trim() ||
+  (typeof window !== 'undefined' ? localStorage.getItem('kkhm_supabase_anon_key')?.trim() || '' : '');
 
 // Normalize URL: remove any accidental trailing slashes or /rest/v1 appended by user
 export const SUPABASE_URL = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');

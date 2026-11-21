@@ -12,8 +12,13 @@ createRoot(document.getElementById('root')!).render(
 // Register PWA service worker safely (works on GitHub Pages subpaths via relative ./sw.js)
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {
-      // Silently ignore in restricted preview iframes or non-HTTPS local contexts
-    });
+    navigator.serviceWorker
+      .register('./sw.js')
+      .then((reg) => {
+        reg.update();
+      })
+      .catch(() => {
+        // Silently ignore in restricted preview iframes or non-HTTPS local contexts
+      });
   });
 }
