@@ -508,6 +508,19 @@ class DataService {
           profile_id: prof.id,
           admission_number: payload.admission_number.trim(),
           batch_name: payload.batch_name.trim(),
+          cic_ad_no: payload.cic_ad_no?.trim() || null,
+          clg_ad_no: payload.clg_ad_no?.trim() || payload.admission_number.trim(),
+          academic_year_text: payload.academic_year_text?.trim() || null,
+          semester_text: payload.semester_text?.trim() || null,
+          semester_period: payload.semester_period?.trim() || null,
+          course_stream: payload.course_stream?.trim() || null,
+          college_name: payload.college_name?.trim() || null,
+          subject_title: payload.subject_title?.trim() || null,
+          proposal_app_no: payload.proposal_app_no?.trim() || null,
+          course_credit: payload.course_credit?.trim() || null,
+          guide_name: payload.guide_name?.trim() || null,
+          whatsapp_number: payload.whatsapp_number?.trim() || null,
+          reference_notes: payload.reference_notes?.trim() || null,
         })
         .select()
         .single();
@@ -640,6 +653,19 @@ class DataService {
         .update({
           admission_number: payload.admission_number.trim(),
           batch_name: payload.batch_name.trim(),
+          cic_ad_no: payload.cic_ad_no !== undefined ? payload.cic_ad_no.trim() || null : undefined,
+          clg_ad_no: payload.clg_ad_no !== undefined ? payload.clg_ad_no.trim() || null : undefined,
+          academic_year_text: payload.academic_year_text !== undefined ? payload.academic_year_text.trim() || null : undefined,
+          semester_text: payload.semester_text !== undefined ? payload.semester_text.trim() || null : undefined,
+          semester_period: payload.semester_period !== undefined ? payload.semester_period.trim() || null : undefined,
+          course_stream: payload.course_stream !== undefined ? payload.course_stream.trim() || null : undefined,
+          college_name: payload.college_name !== undefined ? payload.college_name.trim() || null : undefined,
+          subject_title: payload.subject_title !== undefined ? payload.subject_title.trim() || null : undefined,
+          proposal_app_no: payload.proposal_app_no !== undefined ? payload.proposal_app_no.trim() || null : undefined,
+          course_credit: payload.course_credit !== undefined ? payload.course_credit.trim() || null : undefined,
+          guide_name: payload.guide_name !== undefined ? payload.guide_name.trim() || null : undefined,
+          whatsapp_number: payload.whatsapp_number !== undefined ? payload.whatsapp_number.trim() || null : undefined,
+          reference_notes: payload.reference_notes !== undefined ? payload.reference_notes.trim() || null : undefined,
         })
         .eq('id', studentId);
       if (sErr) throw new Error(sErr.message);
@@ -2037,6 +2063,47 @@ class DataService {
         to: updates.approval_mode,
       });
     }
+  }
+
+  public exportDatabaseBackup(): string {
+    const db = this.getSandbox();
+    return JSON.stringify(db, null, 2);
+  }
+
+  public importDatabaseBackup(actor: Profile, backupJson: string): void {
+    this.assertAdmin(actor);
+    let parsed: DatabaseSnapshot;
+    try {
+      parsed = JSON.parse(backupJson) as DatabaseSnapshot;
+    } catch {
+      throw new Error('The uploaded file is not a valid JSON database file.');
+    }
+
+    if (
+      !parsed ||
+      !Array.isArray(parsed.profiles) ||
+      !Array.isArray(parsed.students) ||
+      !parsed.app_settings
+    ) {
+      throw new Error('Invalid backup structure. Missing essential database tables.');
+    }
+
+    this.sandboxDb = parsed;
+    this.saveSandbox();
+    this.appendSandboxAudit(actor, 'DATABASE_RESTORED', 'app_settings', '1', {
+      student_count: parsed.students.length,
+      profile_count: parsed.profiles.length,
+      restored_at: new Date().toISOString(),
+    });
+  }
+
+  public resetDatabaseToDefault(actor: Profile): void {
+    this.assertAdmin(actor);
+    this.sandboxDb = createIsolatedSandboxSeed();
+    this.saveSandbox();
+    this.appendSandboxAudit(actor, 'DATABASE_RESET', 'app_settings', '1', {
+      reset_at: new Date().toISOString(),
+    });
   }
 
   public async markNotificationRead(profileId: string, notificationId?: string): Promise<void> {

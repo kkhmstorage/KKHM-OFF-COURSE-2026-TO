@@ -1,5 +1,19 @@
-import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Check, KeyRound, Save, Shield, Sliders } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  AlertCircle,
+  AlertTriangle,
+  Check,
+  Cloud,
+  Database,
+  Download,
+  HardDrive,
+  KeyRound,
+  RefreshCw,
+  Save,
+  Shield,
+  Sliders,
+  Upload,
+} from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DAY_NAMES, getDefaultPeriodTimings } from '../../lib/dateUtils';
 import { dataService } from '../../services/dataService';
@@ -46,6 +60,10 @@ export const AdminSettingsModule: React.FC = () => {
   const [credPassword, setCredPassword] = useState('');
   const [credActive, setCredActive] = useState(true);
   const [credSaving, setCredSaving] = useState(false);
+
+  // Database Backup & Restore State
+  const restoreFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [restoring, setRestoring] = useState(false);
 
   const [saving, setSaving] = useState(false);
 
@@ -182,6 +200,63 @@ export const AdminSettingsModule: React.FC = () => {
     }
   };
 
+  const handleExportBackup = () => {
+    const jsonStr = dataService.exportDatabaseBackup();
+    const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.download = `kkhm-ams-database-backup-${dateStr}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    notify('success', 'Complete database backup (.json) downloaded safely.');
+  };
+
+  const handleRestoreFilePicked = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      confirmAction({
+        title: 'Restore Database from Backup File?',
+        description: `This will restore records from "${file.name}". All student records, login credentials, reports, and settings will be restored from the backup file.`,
+        confirmLabel: 'Restore Database',
+        tone: 'danger',
+        onConfirm: async () => {
+          setRestoring(true);
+          try {
+            dataService.importDatabaseBackup(session.profile, text);
+            await refresh();
+            notify('success', 'Database restored successfully from backup file.');
+          } catch (err) {
+            notify('error', err instanceof Error ? err.message : 'Failed to restore database.');
+          } finally {
+            setRestoring(false);
+          }
+        },
+      });
+    } catch {
+      notify('error', 'Could not read backup file.');
+    }
+  };
+
+  const handleResetDatabase = () => {
+    confirmAction({
+      title: 'Reset Database to Factory Defaults?',
+      description:
+        'This will reset all data back to the default seed. Any custom students or reports added will be wiped unless you downloaded a backup first.',
+      confirmLabel: 'Reset Database',
+      tone: 'danger',
+      onConfirm: async () => {
+        dataService.resetDatabaseToDefault(session.profile);
+        await refresh();
+        notify('success', 'Database reset to initial default state.');
+      },
+    });
+  };
+
   const workflowDescription: Record<string, string> = {
     'daily-daily':
       'Daily Entry + Daily Approval: Students log each day separately and submit daily. Next scheduled working day unlocks only after the mentor approves every required period of the previous day.',
@@ -204,7 +279,7 @@ export const AdminSettingsModule: React.FC = () => {
         {(
           [
             ['reporting', 'Reporting Modes'],
-            ['security', 'Security & Credentials'],
+            ['security', 'Security & Database'],
             ['academic', 'Academic Schedule'],
             ['general', 'General'],
             ['notifications', 'Notifications'],
@@ -389,25 +464,180 @@ export const AdminSettingsModule: React.FC = () => {
             </div>
           </section>
 
-          {/* Database & GitHub Pages Hosting Status */}
-          <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <Shield className="h-4 w-4 text-teal-600" />
-              <span>Database &amp; GitHub Pages Deployment Architecture</span>
+          {/* Database Mode, Backup & Disaster Recovery Card */}
+          <section className="rounded-xl border border-slate-200 bg-white p-5 space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+              <div className="flex items-center gap-2.5">
+                <Database className="h-5 w-5 text-[#1E3A5F]" />
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900">
+                    Database Management &amp; Data Protection (ഡാറ്റാ സംരക്ഷണം)
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Cloud database connectivity status, full system backups, and instant disaster recovery
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                {isProductionSupabase ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800 border border-emerald-200">
+                    <Cloud className="h-3.5 w-3.5 text-emerald-600" />
+                    Cloud PostgreSQL Connected (Supabase)
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 border border-amber-200">
+                    <HardDrive className="h-3.5 w-3.5 text-amber-600" />
+                    Local Browser Store (LocalStorage)
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="mt-3 text-xs text-slate-600 space-y-2 leading-relaxed">
-              <div>
-                <strong>Active Data Mode: </strong>
-                {isProductionSupabase
-                  ? 'Connected to Live Supabase PostgreSQL Database with Row Level Security (RLS).'
-                  : 'Isolated Preview Sandbox Mode (VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are not yet configured).'}
+
+            {/* Explanation Alert */}
+            <div className={`rounded-xl border p-4 text-xs leading-relaxed ${
+              isProductionSupabase
+                ? 'border-emerald-200 bg-emerald-50/50 text-emerald-950'
+                : 'border-amber-200 bg-amber-50/60 text-amber-950'
+            }`}>
+              {isProductionSupabase ? (
+                <div>
+                  <strong className="font-bold">🟢 Cloud Database Active: </strong>
+                  Your portal is connected to live <strong>Supabase PostgreSQL</strong> with Row Level Security (RLS). All student academic records, credentials, reports, and timetable data are securely stored in the cloud. Changes made from any computer or mobile phone are instantly synced in real time.
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <div>
+                    <strong className="font-bold">🟡 Local Browser Store Mode (ഡാറ്റ നഷ്ടപ്പെടാതിരിക്കാൻ ശ്രദ്ധിക്കുക): </strong>
+                    ഇപ്പോൾ ആപ്ലിക്കേഷനിലുള്ള എല്ലാ വിവരങ്ങളും (വിദ്യാർത്ഥികൾ, ലോഗിൻ വിവരങ്ങൾ, റിപ്പോർട്ടുകൾ) ഈ ബ്രൗസറിന്റെ സുരക്ഷിതമായ ലോക്കൽ സ്റ്റോറേജിലാണ് സൂക്ഷിച്ചിരിക്കുന്നത്. പേജ് റീഫ്രഷ് ചെയ്താലും ലോഗൗട്ട് ചെയ്താലും ഡാറ്റ നിലനിൽക്കും.
+                  </div>
+                  <div className="text-[11px] text-amber-900/80">
+                    <strong>ശ്രദ്ധിക്കുക:</strong> ബ്രൗസർ ക്യാഷ് ക്ലിയർ ചെയ്യുകയോ മറ്റൊരു ഫോണിൽ നിന്നോ കമ്പ്യൂട്ടറിൽ നിന്നോ തുറക്കുകയോ ചെയ്യുമ്പോൾ ഈ ഡാറ്റ നഷ്ടപ്പെടാതിരിക്കാൻ താഴെയുള്ള <strong>"Download Full Database Backup (JSON)"</strong> ബട്ടൺ ഉപയോഗിച്ച് ബാക്കപ്പ് ഫയൽ ഡൗൺലോഡ് ചെയ്തു വെക്കാവുന്നതാണ്. സ്ഥിരമായി ക്ലൗഡിൽ സൂക്ഷിക്കാൻ സൗജന്യ <strong>Supabase</strong> ഡാറ്റാബേസ് കണക്റ്റ് ചെയ്യുക.
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Backup & Disaster Recovery Actions */}
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-800 mb-2.5">
+                Instant Backup &amp; Restore Tools (ബാക്കപ്പ് &amp; റീസ്റ്റോർ)
               </div>
-              <div>
-                <strong>Free Hosting Ready: </strong>
-                Includes <code className="font-mono">.github/workflows/deploy-pages.yml</code> for automated GitHub Pages publishing and{' '}
-                <code className="font-mono">supabase/migrations/001–003.sql</code> for one-step Supabase PostgreSQL + RLS setup. See{' '}
-                <code className="font-mono">docs/DEPLOYMENT_GUIDE.md</code>.
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Download Backup */}
+                <div className="rounded-lg border border-slate-200 p-3.5 flex flex-col justify-between gap-3 bg-slate-50/50">
+                  <div>
+                    <div className="flex items-center gap-2 font-semibold text-xs text-slate-900">
+                      <Download className="h-4 w-4 text-[#0D9488]" />
+                      <span>Download Full Backup</span>
+                    </div>
+                    <p className="mt-1 text-[11px] text-slate-500 leading-normal">
+                      Export all students, CIC form details, passwords, mentors, and reports as a single <code className="font-mono">.json</code> backup file.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleExportBackup}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#0D9488] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#0F766E] transition-colors cursor-pointer"
+                  >
+                    <Download className="h-3.5 w-3.5" /> Download Backup (.json)
+                  </button>
+                </div>
+
+                {/* Restore Backup */}
+                <div className="rounded-lg border border-slate-200 p-3.5 flex flex-col justify-between gap-3 bg-slate-50/50">
+                  <div>
+                    <div className="flex items-center gap-2 font-semibold text-xs text-slate-900">
+                      <Upload className="h-4 w-4 text-[#1E3A5F]" />
+                      <span>Restore from Backup</span>
+                    </div>
+                    <p className="mt-1 text-[11px] text-slate-500 leading-normal">
+                      Upload a previously downloaded <code className="font-mono">.json</code> backup file to instantly restore all student data and credentials.
+                    </p>
+                  </div>
+                  <input
+                    ref={restoreFileInputRef}
+                    type="file"
+                    accept=".json"
+                    className="hidden"
+                    onChange={(e) => {
+                      void handleRestoreFilePicked(e.target.files?.[0]);
+                      e.target.value = '';
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={restoring}
+                    onClick={() => restoreFileInputRef.current?.click()}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#1E3A5F] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#162C49] disabled:opacity-50 transition-colors cursor-pointer"
+                  >
+                    <Upload className="h-3.5 w-3.5" /> {restoring ? 'Restoring...' : 'Restore from Backup (.json)'}
+                  </button>
+                </div>
+
+                {/* Reset to Factory Defaults */}
+                <div className="rounded-lg border border-slate-200 p-3.5 flex flex-col justify-between gap-3 bg-slate-50/50">
+                  <div>
+                    <div className="flex items-center gap-2 font-semibold text-xs text-red-900">
+                      <RefreshCw className="h-4 w-4 text-red-600" />
+                      <span>Reset to Initial Seed</span>
+                    </div>
+                    <p className="mt-1 text-[11px] text-slate-500 leading-normal">
+                      Reverts the local database to default institutional seed data. Please ensure you have downloaded a backup first.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleResetDatabase}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-300 bg-white px-3.5 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" /> Reset to Default Seed
+                  </button>
+                </div>
               </div>
+            </div>
+
+            {/* Cloud Database Connection Steps (Supabase Guide) */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#1E3A5F]">
+                <Shield className="h-4 w-4 text-[#1E3A5F]" />
+                <span>How to Connect 100% Free Supabase Cloud Database (സ്ഥിരമായ ഡാറ്റാബേസ് കണക്റ്റ് ചെയ്യാൻ)</span>
+              </div>
+              <ol className="list-decimal list-inside text-xs text-slate-700 space-y-1.5 leading-relaxed">
+                <li>
+                  <a
+                    href="https://supabase.com"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-[#1E3A5F] underline"
+                  >
+                    supabase.com
+                  </a>
+                  -ൽ സൗജന്യമായി ഒരു അക്കൗണ്ട് തുടങ്ങി പുതിയൊരു പ്രൊജക്റ്റ് ഉണ്ടാക്കുക (Region: <strong>Mumbai / India</strong> തിരഞ്ഞെടുക്കാം).
+                </li>
+                <li>
+                  Supabase Dashboard-ലെ <strong>SQL Editor</strong> തുറന്ന് പ്രൊജക്റ്റിലുള്ള മൈഗ്രേഷൻ സ്ക്രിപ്റ്റുകൾ റൺ ചെയ്യുക:
+                  <div className="mt-1 font-mono text-[11px] text-slate-600 bg-white border border-slate-200 rounded p-2">
+                    1. supabase/migrations/001_schema.sql (22 കോർ ടേബിളുകൾ)<br />
+                    2. supabase/migrations/002_rls_and_rpcs.sql (ലോഗിൻ RPC &amp; സുരക്ഷ)<br />
+                    3. supabase/migrations/003_seed_and_rls_tests.sql (അഡ്മിൻ സീഡ്)<br />
+                    4. supabase/migrations/004_cic_student_fields.sql (CIC ഫോം ഫീൽഡുകൾ)
+                  </div>
+                </li>
+                <li>
+                  Supabase <strong>Project Settings -&gt; API</strong>-ൽ നിന്ന് <strong>Project URL</strong> ഉം <strong>anon key</strong> യും കോപ്പി ചെയ്യുക.
+                </li>
+                <li>
+                  നിങ്ങളുടെ GitHub റെപ്പോസിറ്ററിയിൽ (<code className="font-mono">Settings -&gt; Secrets and variables -&gt; Actions</code>) ചെന്ന് 2 സീക്രട്ടുകൾ ആഡ് ചെയ്യുക:
+                  <div className="mt-1 font-mono text-[11px] text-slate-600 bg-white border border-slate-200 rounded p-2">
+                    VITE_SUPABASE_URL = നിങ്ങളുടെ Supabase Project URL<br />
+                    VITE_SUPABASE_ANON_KEY = നിങ്ങളുടെ Supabase Anon Key
+                  </div>
+                </li>
+                <li>
+                  ഇത്രയും ചെയ്താൽ GitHub Actions തനിയെ റൺ ആയി ആപ്ലിക്കേഷൻ ലൈവ് ക്ലൗഡ് ഡാറ്റാബേസുമായി കണക്റ്റാവും. അതിനു ശേഷം ഏത് ഡിവൈസിൽ നിന്നും ഡാറ്റ എപ്പോഴും ലഭ്യമാകും!
+                </li>
+              </ol>
             </div>
           </section>
         </div>

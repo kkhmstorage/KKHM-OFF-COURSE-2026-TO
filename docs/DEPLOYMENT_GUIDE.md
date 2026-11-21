@@ -9,10 +9,11 @@ This guide explains how to connect the application to a free **Supabase PostgreS
 ## Part 1: Set Up Supabase (Free Tier PostgreSQL + RLS)
 
 1. Go to [https://supabase.com](https://supabase.com) and create a free project (recommended region: **Mumbai / South Asia** for `Asia/Kolkata` low latency).
-2. In your Supabase Dashboard, open **SQL Editor** and run the three migration scripts in order:
+2. In your Supabase Dashboard, open **SQL Editor** and run the migration scripts in order:
    - `supabase/migrations/001_schema.sql` — Creates all 22 normalized PostgreSQL tables, foreign keys, unique constraints, and indexes.
    - `supabase/migrations/002_rls_and_rpcs.sql` — Enables Row Level Security (RLS) on all tables and installs secure backend functions (`authenticate_user`, `admin_update_credentials`, `submit_report_unit`, `review_period_entry`).
    - `supabase/migrations/003_seed_and_rls_tests.sql` — Seeds the temporary initial Administrator login (`kkhmoffcourse` / `1111`) and the `2026-27` academic year.
+   - `supabase/migrations/004_cic_student_fields.sql` — Adds all Coordination of Islamic Colleges (CIC) student and subject registration columns.
 3. Go to **Project Settings -> API** and copy:
    - **Project URL** (`VITE_SUPABASE_URL`)
    - **anon public key** (`VITE_SUPABASE_ANON_KEY`)

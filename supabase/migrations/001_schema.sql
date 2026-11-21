@@ -51,11 +51,27 @@ CREATE TABLE IF NOT EXISTS public.students (
   batch_name TEXT NOT NULL,
   guardian_phone TEXT,
   notes TEXT,
+  cic_ad_no TEXT,
+  clg_ad_no TEXT,
+  academic_year_text TEXT,
+  semester_text TEXT,
+  semester_period TEXT,
+  course_stream TEXT,
+  college_name TEXT,
+  subject_title TEXT,
+  proposal_app_no TEXT,
+  course_credit TEXT,
+  guide_name TEXT,
+  whatsapp_number TEXT,
+  reference_notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_students_batch ON public.students(batch_name);
+CREATE INDEX IF NOT EXISTS idx_students_course_stream ON public.students(course_stream);
+CREATE INDEX IF NOT EXISTS idx_students_cic_ad_no ON public.students(cic_ad_no);
+CREATE INDEX IF NOT EXISTS idx_students_clg_ad_no ON public.students(clg_ad_no);
 
 -- 3. mentors
 CREATE TABLE IF NOT EXISTS public.mentors (
