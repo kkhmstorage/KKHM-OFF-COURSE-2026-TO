@@ -11,6 +11,7 @@ import {
   Upload,
   UserCheck,
   UserX,
+  Trash2,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DAY_NAMES, formatDisplayDate } from '../../lib/dateUtils';
@@ -335,6 +336,30 @@ export const StudentsModule: React.FC = () => {
     });
   };
 
+  const handleDeleteStudent = (row: StudentRow) => {
+    confirmAction({
+      title: `Delete Student "${row.fullName}"?`,
+      description: `Are you sure you want to permanently delete student "${row.fullName}" (Admission No: ${row.admissionNumber}, @${row.username})? This will permanently delete the student account, login access, and all associated academic enrollments and report records. This action cannot be undone.`,
+      confirmLabel: 'Delete Student Permanently',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await dataService.deleteStudent(session.profile, row.studentId);
+          if (viewingStudentId === row.studentId) {
+            setViewingStudentId(null);
+          }
+          if (editingId === row.studentId) {
+            setEditorOpen(false);
+          }
+          await refresh();
+          notify('success', `Student "${row.fullName}" was deleted permanently.`);
+        } catch (err) {
+          notify('error', err instanceof Error ? err.message : 'Unable to delete student record.');
+        }
+      },
+    });
+  };
+
   const handleExportCsv = () => {
     downloadCsv(
       `kkhm-students-${activeYear.name}.csv`,
@@ -632,6 +657,14 @@ export const StudentsModule: React.FC = () => {
                         ) : (
                           <UserCheck className="h-3.5 w-3.5 text-emerald-600" />
                         )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteStudent(row)}
+                        className="rounded-md border border-red-200 p-1.5 text-red-600 hover:bg-red-50 hover:text-red-700 cursor-pointer"
+                        title="Delete Student Permanently"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   </td>
@@ -970,21 +1003,38 @@ export const StudentsModule: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setEditorOpen(false)}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg bg-[#1E3A5F] px-5 py-2 text-sm font-semibold text-white hover:bg-[#162C49] disabled:opacity-60 cursor-pointer shadow-sm"
-            >
-              {saving ? 'Saving...' : editingId ? 'Save Student Changes' : 'Register Student'}
-            </button>
+          <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-200">
+            {editingId ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const targetRow = rows.find((r) => r.studentId === editingId);
+                  if (targetRow) {
+                    handleDeleteStudent(targetRow);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors cursor-pointer"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Delete Student
+              </button>
+            ) : <div />}
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setEditorOpen(false)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-lg bg-[#1E3A5F] px-5 py-2 text-sm font-semibold text-white hover:bg-[#162C49] disabled:opacity-60 cursor-pointer shadow-sm"
+              >
+                {saving ? 'Saving...' : editingId ? 'Save Student Changes' : 'Register Student'}
+              </button>
+            </div>
           </div>
         </form>
       </Modal>
@@ -1219,31 +1269,41 @@ export const StudentsModule: React.FC = () => {
       >
         {viewedRow && (
           <div>
-            <div className="flex flex-wrap gap-1 border-b border-slate-200 pb-3 mb-4">
-              {(
-                [
-                  ['overview', 'Overview'],
-                  ['enrollments', 'Academic Enrollments'],
-                  ['mentors', 'Mentor History'],
-                  ['timetable', 'Timetable'],
-                  ['reports', 'Activity Reports'],
-                  ['subjects', 'Subject History'],
-                  ['history', 'Academic History'],
-                ] as const
-              ).map(([tabKey, tabLabel]) => (
-                <button
-                  key={tabKey}
-                  type="button"
-                  onClick={() => setProfileTab(tabKey)}
-                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-                    profileTab === tabKey
-                      ? 'bg-[#1E3A5F] text-white'
-                      : 'text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  {tabLabel}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3 mb-4">
+              <div className="flex flex-wrap gap-1">
+                {(
+                  [
+                    ['overview', 'Overview'],
+                    ['enrollments', 'Academic Enrollments'],
+                    ['mentors', 'Mentor History'],
+                    ['timetable', 'Timetable'],
+                    ['reports', 'Activity Reports'],
+                    ['subjects', 'Subject History'],
+                    ['history', 'Academic History'],
+                  ] as const
+                ).map(([tabKey, tabLabel]) => (
+                  <button
+                    key={tabKey}
+                    type="button"
+                    onClick={() => setProfileTab(tabKey)}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                      profileTab === tabKey
+                        ? 'bg-[#1E3A5F] text-white'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    {tabLabel}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => handleDeleteStudent(viewedRow)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors cursor-pointer"
+                title="Delete Student Record"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Delete Student
+              </button>
             </div>
 
             {profileTab === 'overview' && (

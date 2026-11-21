@@ -756,6 +756,78 @@ class DataService {
     this.saveSandbox();
   }
 
+  public async deleteStudent(actor: Profile, studentId: string): Promise<void> {
+    this.assertAdmin(actor);
+    if (isSupabaseConfigured()) {
+      const sb = getSupabaseClient()!;
+      const { data: stu } = await sb
+        .from('students')
+        .select('id, profile_id, admission_number')
+        .eq('id', studentId)
+        .maybeSingle();
+      if (!stu) throw new Error('Student not found.');
+
+      // Deleting student cascades to enrollments, assignments, reports, and period activities in PostgreSQL
+      const { error: sErr } = await sb.from('students').delete().eq('id', studentId);
+      if (sErr) throw new Error(sErr.message);
+
+      if (stu.profile_id) {
+        await sb.from('profiles').delete().eq('id', stu.profile_id);
+      }
+
+      await this.logSupabaseAudit(actor, 'STUDENT_DELETED', 'student', studentId, {
+        admission_number: stu.admission_number,
+      });
+      return;
+    }
+
+    const db = this.getSandbox();
+    const stu = db.students.find((s) => s.id === studentId);
+    if (!stu) throw new Error('Student not found.');
+    const prof = db.profiles.find((p) => p.id === stu.profile_id);
+
+    // Collect all submission IDs for this student
+    const subIds = new Set(
+      db.report_submissions.filter((r) => r.student_id === studentId).map((r) => r.id)
+    );
+
+    // Cascade deletions in sandbox
+    db.students = db.students.filter((s) => s.id !== studentId);
+    if (stu.profile_id) {
+      db.profiles = db.profiles.filter((p) => p.id !== stu.profile_id);
+      db.notifications = db.notifications.filter(
+        (n) => n.recipient_profile_id !== stu.profile_id
+      );
+    }
+    db.student_academic_enrollments = db.student_academic_enrollments.filter(
+      (e) => e.student_id !== studentId
+    );
+    db.mentor_assignments = db.mentor_assignments.filter((m) => m.student_id !== studentId);
+    db.student_subject_selections = db.student_subject_selections.filter(
+      (s) => s.student_id !== studentId
+    );
+    db.student_timetable_assignments = db.student_timetable_assignments.filter(
+      (t) => t.student_id !== studentId
+    );
+    db.timetable_overrides = db.timetable_overrides.filter((o) => o.student_id !== studentId);
+    db.academic_calendar_exceptions = db.academic_calendar_exceptions.filter(
+      (c) => c.student_id !== studentId
+    );
+    db.period_activity_entries = db.period_activity_entries.filter(
+      (p) => p.student_id !== studentId && !subIds.has(p.submission_id)
+    );
+    db.report_review_history = db.report_review_history.filter(
+      (h) => !subIds.has(h.submission_id)
+    );
+    db.report_submissions = db.report_submissions.filter((r) => r.student_id !== studentId);
+
+    this.appendSandboxAudit(actor, 'STUDENT_DELETED', 'student', studentId, {
+      full_name: prof?.full_name || 'Unknown',
+      admission_number: stu.admission_number,
+    });
+    this.saveSandbox();
+  }
+
   public async enrollStudentInYear(
     actor: Profile,
     studentId: string,
@@ -1808,9 +1880,8 @@ class DataService {
             recipient_profile_id: mentor.profile_id,
             academic_year_id: payload.academic_year_id,
             title: isResubmission ? 'Correction Resubmitted' : 'New Activity Report Submitted',
-            message: `${actor.full_name} ${isResubmission ? 'resubmitted revised periods' : 'submitted an activity report'} for ${
-              effectiveApprovalMode === 'weekly' ? `Week of ${unitSpec.start_date}` : unitSpec.start_date
-            }.`,
+            message: `${actor.full_name} ${isResubmission ? 'resubmitted revised periods' : 'submitted an activity report'} for ${effectiveApprovalMode === 'weekly' ? `Week of ${unitSpec.start_date}` : unitSpec.start_date
+              }.`,
             category: 'report_submitted',
             link_target: 'pending-approvals',
             reference_id: sub.id,
