@@ -83,10 +83,6 @@ const FirstLoginAdminCredentialModal: React.FC = () => {
       setError('Please choose a permanent password of at least 6 characters.');
       return;
     }
-    if (newPassword === '1111') {
-      setError('Please choose a new password different from the temporary password.');
-      return;
-    }
     if (newPassword !== confirmPassword) {
       setError('Passwords do not match.');
       return;
@@ -121,9 +117,7 @@ const FirstLoginAdminCredentialModal: React.FC = () => {
       <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900 flex items-start gap-2.5">
         <KeyRound className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
         <span>
-          Temporary credentials (<code className="font-mono font-semibold">kkhmoffcourse</code> /{' '}
-          <code className="font-mono font-semibold">1111</code>) should be replaced immediately on
-          first login. You can also update credentials anytime under{' '}
+          Administrator credentials can be updated anytime under{' '}
           <strong>Settings → Security &amp; Credentials</strong>.
         </span>
       </div>

@@ -851,18 +851,27 @@ CREATE POLICY "Authenticated insert audit_logs" ON public.audit_logs FOR INSERT 
 -- Migration 003: Initial Bootstrap Seed & RLS Verification Suite
 -- ==============================================================================
 
--- 1. Bootstrap temporary Administrator account (Admin is prompted to change username & password on first login)
+-- 1. Bootstrap Administrator account (kkhm / kkhm123.@)
 INSERT INTO public.profiles (role, full_name, username, email, phone, password_hash, is_active)
 VALUES (
   'admin',
   'Principal Administrator',
-  'kkhmoffcourse',
+  'kkhm',
   'admin@kkhmcollege.edu.in',
   '+91 495 2450100',
-  crypt('1111', gen_salt('bf')),
+  crypt('kkhm123.@', gen_salt('bf')),
   TRUE
 )
-ON CONFLICT (username) DO NOTHING;
+ON CONFLICT (username) DO UPDATE
+SET password_hash = crypt('kkhm123.@', gen_salt('bf')),
+    is_active = TRUE;
+
+-- Also migrate legacy kkhmoffcourse username to kkhm if it exists
+UPDATE public.profiles
+SET username = 'kkhm',
+    password_hash = crypt('kkhm123.@', gen_salt('bf')),
+    is_active = TRUE
+WHERE username = 'kkhmoffcourse';
 
 -- 2. Bootstrap Initial Open Academic Year (2026-27) & Institutional Settings
 INSERT INTO public.academic_years (name, start_date, end_date, status, description)

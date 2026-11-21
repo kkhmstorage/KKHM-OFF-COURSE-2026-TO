@@ -131,7 +131,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setRoutePayload({});
       if (
         authSession.profile.role === 'admin' &&
-        (authSession.profile.is_temporary_password || password === '1111')
+        authSession.profile.is_temporary_password
       ) {
         setRequiresAdminCredentialSetup(true);
       } else {

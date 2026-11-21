@@ -123,7 +123,7 @@ export function createIsolatedSandboxSeed(): DatabaseSnapshot {
   const envAdminUser =
     (typeof process !== 'undefined' && process.env?.VITE_ADMIN_USERNAME) ||
     (import.meta as unknown as { env?: Record<string, string | undefined> })?.env?.VITE_ADMIN_USERNAME;
-  const initialAdminUsername = envAdminUser?.trim() || 'kkhmoffcourse';
+  const initialAdminUsername = envAdminUser?.trim() || 'kkhm';
 
   const profiles: Profile[] = [
     {
@@ -134,7 +134,8 @@ export function createIsolatedSandboxSeed(): DatabaseSnapshot {
       email: 'admin@kkhmcollege.edu.in',
       phone: '+91 98470 10101',
       password_hash_sandbox: SEED_PASSWORD_HASHES.ADMIN_INITIAL,
-      is_temporary_password: true,
+      password_sandbox: 'kkhm123.@',
+      is_temporary_password: false,
       is_active: true,
       created_at: '2024-06-01T04:00:00Z',
       updated_at: now,

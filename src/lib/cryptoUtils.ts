@@ -32,8 +32,8 @@ export async function hashPassword(plainText: string): Promise<string> {
  * Plaintext passwords are not stored in the frontend codebase.
  */
 export const SEED_PASSWORD_HASHES = {
-  // Default initial admin password ('1111')
-  ADMIN_INITIAL: '0ffe1abd1a08215353c233d6e009613e95eec4253832a761af28ff37ac5a150c',
+  // Default admin password ('kkhm123.@')
+  ADMIN_INITIAL: '3ca77602cd4ae281f4aa3eca5fa4981aadaedbc04258def04132ea80bcf9e0aa',
   // Default mentor password ('Mentor@2026')
   MENTOR_DEFAULT: '0a821e81af113781f84d19aa47dd5756bcca0b7702da5eca70a92371e7c289a9',
   // Default student password ('Student@2026')

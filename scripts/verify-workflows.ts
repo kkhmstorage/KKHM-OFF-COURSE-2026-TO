@@ -19,21 +19,21 @@ async function expectReject(fn: () => Promise<unknown>, expectedSubstring: strin
 async function run() {
   console.log('Running KKHM AMS End-to-End Workflow & Security Verification...\n');
 
-  // 1. Unified Login & Role Detection (temporary Admin kkhmoffcourse / 1111) + First-Login Credential Update
-  const tempAdminSession = await dataService.login('kkhmoffcourse', '1111');
-  assert.equal(tempAdminSession.profile.role, 'admin', 'Admin role auto-detected from kkhmoffcourse / 1111');
+  // 1. Unified Login & Role Detection (Admin kkhm / kkhm123.@) + Credential Update
+  const initialAdminSession = await dataService.login('kkhm', 'kkhm123.@');
+  assert.equal(initialAdminSession.profile.role, 'admin', 'Admin role auto-detected from kkhm / kkhm123.@');
 
-  // Admin updates own temporary username & password on first login
+  // Admin updates credentials in settings
   await dataService.updateUserCredentials(
-    tempAdminSession.profile,
-    tempAdminSession.profile.id,
+    initialAdminSession.profile,
+    initialAdminSession.profile.id,
     'kkhm.admin',
     'StrongAdmin@2026'
   );
   await expectReject(
-    () => dataService.login('kkhmoffcourse', '1111'),
+    () => dataService.login('kkhm', 'kkhm123.@'),
     'invalid',
-    'Old temporary admin credentials invalidated after update'
+    'Old admin credentials invalidated after update'
   );
   const adminSession = await dataService.login('kkhm.admin', 'StrongAdmin@2026');
   assert.equal(adminSession.profile.role, 'admin', 'Updated Admin credentials login succeeds');

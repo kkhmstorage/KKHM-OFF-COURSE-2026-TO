@@ -62,6 +62,16 @@ class DataService {
       if (!this.sandboxDb) {
         this.sandboxDb = createIsolatedSandboxSeed();
         this.saveSandbox();
+      } else {
+        // Automatically sync admin credentials to kkhm / kkhm123.@
+        const admin = this.sandboxDb.profiles.find((p) => p.role === 'admin');
+        if (admin && (admin.username !== 'kkhm' || admin.is_temporary_password || admin.password_sandbox !== 'kkhm123.@')) {
+          admin.username = 'kkhm';
+          admin.password_hash_sandbox = SEED_PASSWORD_HASHES.ADMIN_INITIAL;
+          admin.password_sandbox = 'kkhm123.@';
+          admin.is_temporary_password = false;
+          this.saveSandbox();
+        }
       }
     }
     return this.sandboxDb;
