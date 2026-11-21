@@ -2,7 +2,12 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { defineConfig } from 'vite';
+
+const currentDir = typeof import.meta.dirname !== 'undefined'
+  ? import.meta.dirname
+  : path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig(() => {
   return {
@@ -19,18 +24,28 @@ export default defineConfig(() => {
           if (error) {
             return;
           }
-          const distDir = path.resolve(__dirname, 'dist');
-          const srcAssets = path.resolve(__dirname, 'src/assets');
+          const distDir = path.resolve(currentDir, 'dist');
+          const srcAssets = path.resolve(currentDir, 'src/assets');
           const distAssets = path.resolve(distDir, 'src/assets');
-          if (fs.existsSync(distDir) && fs.existsSync(srcAssets)) {
-            fs.cpSync(srcAssets, distAssets, { recursive: true, force: true });
+          if (fs.existsSync(distDir)) {
+            if (fs.existsSync(srcAssets)) {
+              fs.cpSync(srcAssets, distAssets, { recursive: true, force: true });
+            }
+            // Generate GitHub Pages 404.html and .nojekyll automatically
+            const indexHtml = path.resolve(distDir, 'index.html');
+            const notFoundHtml = path.resolve(distDir, '404.html');
+            const noJekyll = path.resolve(distDir, '.nojekyll');
+            if (fs.existsSync(indexHtml)) {
+              fs.copyFileSync(indexHtml, notFoundHtml);
+            }
+            fs.writeFileSync(noJekyll, '');
           }
         },
       },
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(currentDir, '.'),
       },
     },
     server: {

@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, KeyRound, Lock, ShieldCheck, User } from 'lucide-react';
+import { Eye, EyeOff, KeyRound, Lock, ShieldCheck, Sparkles, User } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { CollegeEmblem, Modal } from './ui/CommonUI';
 import { PWAInstallButton } from './PWAInstallButton';
 
 export const LoginPage: React.FC = () => {
-  const { login, db } = useApp();
+  const { login, db, isProductionSupabase } = useApp();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -179,6 +179,57 @@ export const LoginPage: React.FC = () => {
                 {submitting ? 'Signing in...' : 'Sign In'}
               </button>
             </form>
+
+            {!isProductionSupabase && (
+              <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-xs text-amber-900">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold flex items-center gap-1.5 text-amber-950">
+                    <Sparkles className="h-3.5 w-3.5 text-amber-600" /> Demo Sandbox Mode
+                  </span>
+                  <span className="text-[11px] text-amber-700 bg-amber-100/90 px-2 py-0.5 rounded-full font-medium">
+                    Quick Fill
+                  </span>
+                </div>
+                <p className="text-amber-800 text-[11px] leading-relaxed mb-3">
+                  Click any demo account below to test the application immediately:
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIdentifier('kkhmoffcourse');
+                      setPassword('1111');
+                    }}
+                    className="rounded-lg bg-white border border-amber-300 py-2 px-2 text-center hover:bg-amber-100/70 transition cursor-pointer font-medium text-amber-950 shadow-xs"
+                  >
+                    <span className="block font-semibold">Admin</span>
+                    <span className="text-[10px] text-slate-500 font-mono">1111</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIdentifier('mentor1');
+                      setPassword('Mentor@2026');
+                    }}
+                    className="rounded-lg bg-white border border-amber-300 py-2 px-2 text-center hover:bg-amber-100/70 transition cursor-pointer font-medium text-amber-950 shadow-xs"
+                  >
+                    <span className="block font-semibold">Mentor</span>
+                    <span className="text-[10px] text-slate-500 font-mono">Mentor@2026</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIdentifier('student1');
+                      setPassword('Student@2026');
+                    }}
+                    className="rounded-lg bg-white border border-amber-300 py-2 px-2 text-center hover:bg-amber-100/70 transition cursor-pointer font-medium text-amber-950 shadow-xs"
+                  >
+                    <span className="block font-semibold">Student</span>
+                    <span className="text-[10px] text-slate-500 font-mono">Student@2026</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
         </div>
       </main>
