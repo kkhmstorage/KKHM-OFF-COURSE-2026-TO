@@ -377,12 +377,19 @@ export const StudentTimetableView: React.FC = () => {
                           </td>
                         );
                       }
-                      const label = scope.usesStageConfig
-                        ? formatOffCourseSlotLabel(sl, scope.stage, scope.studentSubjectLabel)
-                        : sl?.planned_activity || 'Off-Course';
+                      const subjectSublabel = scope.usesStageConfig
+                        ? scope.studentSubjectLabel
+                        : sl?.planned_activity && sl.planned_activity !== 'Off-Course'
+                        ? sl.planned_activity
+                        : undefined;
                       return (
                         <td key={idx} className="px-3 py-3 align-top bg-teal-50/50">
-                          <div className="font-semibold text-teal-900">{label}</div>
+                          <div className="font-semibold text-teal-900">Off-Course</div>
+                          {subjectSublabel && (
+                            <div className="text-[11px] font-medium text-teal-800 mt-0.5 leading-snug">
+                              {subjectSublabel}
+                            </div>
+                          )}
                           {sl && (
                             <div className="text-[10px] font-mono tabular-nums text-teal-700/80 mt-0.5">
                               {sl.start_time}–{sl.end_time}

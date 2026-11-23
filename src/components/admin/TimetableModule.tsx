@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   BookOpen,
-  Check,
   CheckCircle2,
   Copy,
   Plus,
@@ -19,14 +18,14 @@ import {
   ACADEMIC_STAGE_META,
   getClassStudentOptions,
   inferSemesterStage,
-  isStagePerStudentTick,
 } from '../../lib/timetableUtils';
 import { dataService } from '../../services/dataService';
 import type { AcademicStage, TimetableSlot, TimetableTemplate } from '../../types/domain';
 import { EmptyState, Modal, PageHeader, StatusLabel } from '../ui/CommonUI';
 
 interface EditableGridCell {
-  activity: string;
+  /** Optional general college timetable subject running in this period (Admin reference, e.g. Urdu, Fiqh, Arabic) */
+  generalSubject: string;
   start: string;
   end: string;
   is_off_course: boolean;
@@ -77,10 +76,10 @@ export const TimetableModule: React.FC = () => {
   // Student highlight from coverage strip (click a student to highlight their Off-Course cells)
   const [highlightedStudentId, setHighlightedStudentId] = useState<string | null>(null);
 
-  // Aliya / PG Period Student Picker modal state
+  // Period Off-Course Student Picker modal state (works for ALL stages: Thamheediyya, Aliya, PG)
   const [pickerCell, setPickerCell] = useState<{ day: number; period: number } | null>(null);
   const [pickerStudentIds, setPickerStudentIds] = useState<string[]>([]);
-  const [pickerActivityNote, setPickerActivityNote] = useState('');
+  const [pickerGeneralSubject, setPickerGeneralSubject] = useState('');
   const [pickerSearch, setPickerSearch] = useState('');
   const [pickerShowAllYear, setPickerShowAllYear] = useState(false);
   const [copySourceKey, setCopySourceKey] = useState('');
@@ -100,7 +99,6 @@ export const TimetableModule: React.FC = () => {
   const activeTemplate = yearTemplates.find((t) => t.id === effectiveTemplateId);
   const activeTemplateSemester = yearSemesters.find((s) => s.id === activeTemplate?.semester_id);
   const activeStage: AcademicStage = inferSemesterStage(activeTemplateSemester, activeTemplate);
-  const perStudentMode = isStagePerStudentTick(activeStage);
   const stageMeta = ACADEMIC_STAGE_META[activeStage];
 
   useEffect(() => {
@@ -118,8 +116,14 @@ export const TimetableModule: React.FC = () => {
           typeof found?.is_off_course === 'boolean'
             ? found.is_off_course
             : studentIds.length > 0;
+        const rawAct = (found?.planned_activity || '').trim();
+        const cleanGeneral =
+          rawAct.toLowerCase() === 'off-course' || rawAct.toLowerCase() === 'regular class'
+            ? ''
+            : rawAct;
+
         next[`${day}-${p}`] = {
-          activity: found?.planned_activity || '',
+          generalSubject: cleanGeneral,
           start: found?.start_time || timing.start_time,
           end: found?.end_time || timing.end_time,
           is_off_course: isOffCourse,
@@ -166,55 +170,65 @@ export const TimetableModule: React.FC = () => {
     return map;
   }, [allYearStudentOptions]);
 
+  // Helper: does a cell apply to a specific student?
+  const isCellActiveForStudent = (cell: EditableGridCell, studentId: string): boolean => {
+    if (cell.off_course_student_ids.length > 0) {
+      return cell.off_course_student_ids.includes(studentId);
+    }
+    // Backward compatibility for legacy Thamheediyya class-wide toggle cells
+    return activeStage === 'thamheediyya' && cell.is_off_course;
+  };
+
   // Weekly Off-Course period counts per student from the live grid
   const weeklyCountByStudent = useMemo(() => {
     const counts = new Map<string, number>();
-    const totalThamheediyyaSlots = Object.values(grid).filter((c) => c.is_off_course).length;
-
     for (const opt of classStudents) {
-      if (!perStudentMode) {
-        counts.set(opt.student.id, totalThamheediyyaSlots);
-      } else {
-        let count = 0;
-        for (const cell of Object.values(grid)) {
-          if (cell.off_course_student_ids.includes(opt.student.id)) {
-            count += 1;
-          }
+      let count = 0;
+      for (const cell of Object.values(grid)) {
+        if (isCellActiveForStudent(cell, opt.student.id)) {
+          count += 1;
         }
-        counts.set(opt.student.id, count);
       }
+      counts.set(opt.student.id, count);
     }
     return counts;
-  }, [grid, classStudents, perStudentMode]);
+  }, [grid, classStudents, activeStage]);
 
   const totalMarkedPeriods = useMemo(() => {
-    return Object.values(grid).filter((cell) =>
-      perStudentMode ? cell.off_course_student_ids.length > 0 : cell.is_off_course
+    return Object.values(grid).filter(
+      (cell) => cell.off_course_student_ids.length > 0 || (activeStage === 'thamheediyya' && cell.is_off_course)
     ).length;
-  }, [grid, perStudentMode]);
+  }, [grid, activeStage]);
 
-  // Populated Aliya/PG period cells available for one-click "Copy students from..."
+  // Populated period cells available for one-click "Copy ticked students from..."
   const copyablePeriodOptions = useMemo(() => {
-    if (!perStudentMode) return [];
-    const list: { key: string; label: string; count: number; studentIds: string[] }[] = [];
+    const list: { key: string; label: string; count: number; studentIds: string[]; generalSubject: string }[] = [];
     for (const day of workingDays) {
       for (let p = 1; p <= periodCount; p++) {
         const key = `${day}-${p}`;
         if (pickerCell && pickerCell.day === day && pickerCell.period === p) continue;
         const cell = grid[key];
-        if (cell && cell.off_course_student_ids.length > 0) {
-          const noteSuffix = cell.activity.trim() ? ` · ${cell.activity.trim()}` : '';
+        if (!cell) continue;
+        const effectiveIds =
+          cell.off_course_student_ids.length > 0
+            ? cell.off_course_student_ids
+            : activeStage === 'thamheediyya' && cell.is_off_course
+              ? classStudents.map((o) => o.student.id)
+              : [];
+        if (effectiveIds.length > 0) {
+          const noteSuffix = cell.generalSubject.trim() ? ` · ${cell.generalSubject.trim()}` : '';
           list.push({
             key,
-            label: `${DAY_NAMES[day]?.short} P${p} (${cell.off_course_student_ids.length} students${noteSuffix})`,
-            count: cell.off_course_student_ids.length,
-            studentIds: cell.off_course_student_ids,
+            label: `${DAY_NAMES[day]?.short} P${p} (${effectiveIds.length} students${noteSuffix})`,
+            count: effectiveIds.length,
+            studentIds: effectiveIds,
+            generalSubject: cell.generalSubject,
           });
         }
       }
     }
     return list;
-  }, [grid, workingDays, periodCount, perStudentMode, pickerCell]);
+  }, [grid, workingDays, periodCount, pickerCell, activeStage, classStudents]);
 
   if (!db || !session || !activeYear) {
     return (
@@ -236,47 +250,22 @@ export const TimetableModule: React.FC = () => {
     setCreateOpen(true);
   };
 
-  const handleToggleThamheediyyaCell = (day: number, period: number) => {
-    if (activeYear.status === 'closed') return;
-    const key = `${day}-${period}`;
-    setGrid((prev) => {
-      const current = prev[key] || {
-        activity: '',
-        start: periodTimings[period - 1]?.start_time || '09:00',
-        end: periodTimings[period - 1]?.end_time || '09:45',
-        is_off_course: false,
-        off_course_student_ids: [],
-      };
-      const nextOffCourse = !current.is_off_course;
-      return {
-        ...prev,
-        [key]: {
-          ...current,
-          is_off_course: nextOffCourse,
-          activity: nextOffCourse
-            ? current.activity.trim() && current.activity.trim().toLowerCase() !== 'regular class'
-              ? current.activity
-              : 'Off-Course'
-            : '',
-        },
-      };
-    });
-    setIsDirty(true);
-  };
-
   const handleOpenStudentPicker = (day: number, period: number) => {
     if (activeYear.status === 'closed') return;
     const key = `${day}-${period}`;
     const cell = grid[key];
+
+    // If it was a legacy Thamheediyya class-wide slot with no explicit IDs, pre-tick all class students
+    const initialIds =
+      cell?.off_course_student_ids && cell.off_course_student_ids.length > 0
+        ? [...cell.off_course_student_ids]
+        : activeStage === 'thamheediyya' && cell?.is_off_course
+          ? classStudents.map((o) => o.student.id)
+          : [];
+
     setPickerCell({ day, period });
-    setPickerStudentIds(cell?.off_course_student_ids ? [...cell.off_course_student_ids] : []);
-    setPickerActivityNote(
-      cell?.activity &&
-        cell.activity.trim().toLowerCase() !== 'off-course' &&
-        cell.activity.trim().toLowerCase() !== 'regular class'
-        ? cell.activity
-        : ''
-    );
+    setPickerStudentIds(initialIds);
+    setPickerGeneralSubject(cell?.generalSubject || '');
     setPickerSearch('');
     setPickerShowAllYear(classStudents.length === 0);
     setCopySourceKey('');
@@ -292,7 +281,7 @@ export const TimetableModule: React.FC = () => {
     };
     setGrid((prev) => {
       const current = prev[key] || {
-        activity: '',
+        generalSubject: '',
         start: timing.start_time,
         end: timing.end_time,
         is_off_course: false,
@@ -302,7 +291,7 @@ export const TimetableModule: React.FC = () => {
         ...prev,
         [key]: {
           ...current,
-          activity: pickerActivityNote.trim(),
+          generalSubject: pickerGeneralSubject.trim(),
           is_off_course: uniqueIds.length > 0,
           off_course_student_ids: uniqueIds,
         },
@@ -317,6 +306,9 @@ export const TimetableModule: React.FC = () => {
     const source = copyablePeriodOptions.find((o) => o.key === copySourceKey);
     if (!source) return;
     setPickerStudentIds([...source.studentIds]);
+    if (!pickerGeneralSubject.trim() && source.generalSubject.trim()) {
+      setPickerGeneralSubject(source.generalSubject.trim());
+    }
     notify('info', `Copied ${source.count} student(s) from ${source.label.split(' (')[0]}.`);
   };
 
@@ -340,11 +332,11 @@ export const TimetableModule: React.FC = () => {
         for (let p = 1; p <= periodCount; p++) {
           const cell = grid[`${day}-${p}`];
           const timing = periodTimings[p - 1] || { start_time: '09:00', end_time: '09:45' };
-          const studentIds = perStudentMode ? cell?.off_course_student_ids || [] : [];
-          const isOffCourse = perStudentMode
-            ? studentIds.length > 0
-            : Boolean(cell?.is_off_course);
-          const cleanLabel = cell?.activity?.trim() || (isOffCourse ? 'Off-Course' : 'Regular Class');
+          const studentIds = cell?.off_course_student_ids || [];
+          const isOffCourse =
+            studentIds.length > 0 || (activeStage === 'thamheediyya' && Boolean(cell?.is_off_course));
+          const cleanLabel =
+            cell?.generalSubject?.trim() || (isOffCourse ? 'Off-Course' : 'Regular Class');
 
           slots.push({
             template_id: effectiveTemplateId,
@@ -364,7 +356,7 @@ export const TimetableModule: React.FC = () => {
       notify(
         'success',
         publish
-          ? 'Timetable published! Students will now see only their scheduled Off-Course periods.'
+          ? 'Timetable published! Ticked students will see Off-Course (with their Off-Course subject) in place of the general period.'
           : 'Timetable draft changes saved.'
       );
     } catch (err) {
@@ -443,7 +435,7 @@ export const TimetableModule: React.FC = () => {
     (a) => a.template_id === effectiveTemplateId && a.academic_year_id === activeYear.id && a.is_active
   ).length;
 
-  // Filtered students inside Aliya/PG picker modal
+  // Filtered students inside Period Student Picker modal
   const pickerSourceList = pickerShowAllYear ? allYearStudentOptions : classStudents;
   const pickerFilteredStudents = pickerSourceList.filter((opt) => {
     const q = pickerSearch.trim().toLowerCase();
@@ -456,15 +448,15 @@ export const TimetableModule: React.FC = () => {
     );
   });
 
-  const zeroPeriodStudentsCount = perStudentMode
-    ? classStudents.filter((opt) => (weeklyCountByStudent.get(opt.student.id) || 0) === 0).length
-    : 0;
+  const zeroPeriodStudentsCount = classStudents.filter(
+    (opt) => (weeklyCountByStudent.get(opt.student.id) || 0) === 0
+  ).length;
 
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Weekly Timetable Management"
-        subtitle={`Stage-aware Off-Course scheduling (${workingDays.length} working days × ${periodCount} periods). Students see only their scheduled Off-Course periods for reporting.`}
+        title="Weekly Off-Course Timetable"
+        subtitle={`Click any period in the class schedule (${workingDays.length} working days × ${periodCount} periods) to tick the students who replace that general period with Off-Course.`}
         actions={
           <>
             <button
@@ -542,7 +534,7 @@ export const TimetableModule: React.FC = () => {
               ? `No Timetable for ${yearSemesters.find((s) => s.id === selectedSemesterTab)?.name || 'this Semester'}`
               : `No Timetable Templates in ${activeYear.name}`
           }
-          description="Create a weekly timetable for this semester. Thamheediyya classes use class-wide Off-Course toggles, while Aliya and PG classes use per-period student tick selection."
+          description="Create a weekly timetable for this semester, then click any period to select the Off-Course students who take Off-Course instead of that general class period."
           action={
             <button
               type="button"
@@ -558,7 +550,7 @@ export const TimetableModule: React.FC = () => {
         />
       ) : (
         <div className="space-y-4">
-          {/* Template Selector, Stage Mode Switch & Publish Toolbar */}
+          {/* Template Selector, Stage Switch & Publish Toolbar */}
           <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-3">
@@ -650,7 +642,7 @@ export const TimetableModule: React.FC = () => {
                 <span>{stageMeta.adminHint}</span>
               </div>
               <div className="font-mono tabular-nums text-slate-600 shrink-0">
-                <strong className="text-[#0D9488]">{totalMarkedPeriods}</strong> Off-Course slots/week
+                <strong className="text-[#0D9488]">{totalMarkedPeriods}</strong> Off-Course periods/week
                 <span className="mx-1.5 text-slate-300">·</span>
                 <span>{classStudents.length} students in class</span>
               </div>
@@ -679,7 +671,7 @@ export const TimetableModule: React.FC = () => {
             </div>
           )}
 
-          {/* Interactive Days x Periods Matrix */}
+          {/* Interactive Days x Periods Matrix (Click ANY cell to tick Off-Course students) */}
           <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
@@ -718,92 +710,31 @@ export const TimetableModule: React.FC = () => {
                         const p = idx + 1;
                         const key = `${day}-${p}`;
                         const cell = grid[key] || {
-                          activity: '',
+                          generalSubject: '',
                           start: '09:00',
                           end: '09:45',
                           is_off_course: false,
                           off_course_student_ids: [],
                         };
 
-                        // MODE A: Thamheediyya (Class-wide Off-Course toggle)
-                        if (!perStudentMode) {
-                          const isHighlighted = Boolean(highlightedStudentId && cell.is_off_course);
-                          return (
-                            <td
-                              key={p}
-                              className="p-2 border-r border-slate-100 last:border-r-0 align-top"
-                            >
-                              <div
-                                className={`rounded-lg border transition-colors p-2.5 space-y-2 ${
-                                  cell.is_off_course
-                                    ? isHighlighted
-                                      ? 'border-[#1E3A5F] bg-teal-50 ring-2 ring-[#1E3A5F]/20'
-                                      : 'border-[#0D9488] bg-teal-50/60'
-                                    : 'border-slate-200 bg-white hover:bg-slate-50'
-                                }`}
-                              >
-                                <button
-                                  type="button"
-                                  disabled={activeYear.status === 'closed'}
-                                  onClick={() => handleToggleThamheediyyaCell(day, p)}
-                                  className="w-full flex items-center justify-between gap-2 text-left cursor-pointer disabled:cursor-not-allowed"
-                                >
-                                  <span
-                                    className={`text-xs font-semibold ${
-                                      cell.is_off_course ? 'text-teal-900' : 'text-slate-500'
-                                    }`}
-                                  >
-                                    {cell.is_off_course ? 'Off-Course' : 'Regular Class'}
-                                  </span>
-                                  <span
-                                    className={`h-5 w-5 rounded flex items-center justify-center shrink-0 border transition-colors ${
-                                      cell.is_off_course
-                                        ? 'bg-[#0D9488] border-[#0D9488] text-white'
-                                        : 'border-slate-300 bg-white text-transparent'
-                                    }`}
-                                  >
-                                    <Check className="h-3.5 w-3.5" />
-                                  </span>
-                                </button>
+                        const explicitIds = cell.off_course_student_ids;
+                        const isLegacyClassWide =
+                          explicitIds.length === 0 && activeStage === 'thamheediyya' && cell.is_off_course;
+                        const effectiveCount = isLegacyClassWide ? classStudents.length : explicitIds.length;
+                        const hasOffCourse = effectiveCount > 0 || isLegacyClassWide;
 
-                                {cell.is_off_course ? (
-                                  <input
-                                    type="text"
-                                    disabled={activeYear.status === 'closed'}
-                                    value={cell.activity}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      setGrid((prev) => ({
-                                        ...prev,
-                                        [key]: { ...cell, activity: val },
-                                      }));
-                                      setIsDirty(true);
-                                    }}
-                                    placeholder="Off-Course (Urdu)"
-                                    className="w-full rounded border border-teal-200 bg-white px-2 py-1 text-[11px] text-slate-800 focus:border-[#0D9488] focus:outline-none"
-                                  />
-                                ) : (
-                                  <div className="text-[11px] text-slate-400">
-                                    Click to mark Off-Course
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-                          );
-                        }
+                        const studentPreviewNames = isLegacyClassWide
+                          ? ['All class students']
+                          : explicitIds
+                              .slice(0, 2)
+                              .map((id) => studentNameById.get(id) || 'Student');
+                        const extraCount = isLegacyClassWide ? 0 : Math.max(0, explicitIds.length - 2);
 
-                        // MODE B: Aliya / PG (Click any cell -> Tick Off-Course students)
-                        const tickedIds = cell.off_course_student_ids;
-                        const hasStudents = tickedIds.length > 0;
-                        const studentPreviewNames = tickedIds
-                          .slice(0, 2)
-                          .map((id) => studentNameById.get(id) || 'Student');
-                        const extraCount = Math.max(0, tickedIds.length - 2);
                         const isHighlighted = Boolean(
-                          highlightedStudentId && tickedIds.includes(highlightedStudentId)
+                          highlightedStudentId && isCellActiveForStudent(cell, highlightedStudentId)
                         );
                         const isDimmed = Boolean(
-                          highlightedStudentId && !tickedIds.includes(highlightedStudentId)
+                          highlightedStudentId && !isCellActiveForStudent(cell, highlightedStudentId)
                         );
 
                         return (
@@ -815,10 +746,10 @@ export const TimetableModule: React.FC = () => {
                               type="button"
                               disabled={activeYear.status === 'closed'}
                               onClick={() => handleOpenStudentPicker(day, p)}
-                              className={`w-full min-h-[76px] rounded-lg border p-2.5 text-left transition-colors cursor-pointer disabled:cursor-not-allowed flex flex-col justify-between gap-1.5 ${
+                              className={`w-full min-h-[78px] rounded-lg border p-2.5 text-left transition-colors cursor-pointer disabled:cursor-not-allowed flex flex-col justify-between gap-1.5 ${
                                 isHighlighted
                                   ? 'border-[#1E3A5F] bg-teal-50 ring-2 ring-[#1E3A5F]/25'
-                                  : hasStudents
+                                  : hasOffCourse
                                     ? 'border-[#0D9488]/60 bg-teal-50/50 hover:bg-teal-50'
                                     : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                               } ${isDimmed ? 'opacity-45' : ''}`}
@@ -826,27 +757,25 @@ export const TimetableModule: React.FC = () => {
                               <div className="flex items-center justify-between gap-1.5 w-full">
                                 <span
                                   className={`text-xs font-semibold truncate ${
-                                    hasStudents ? 'text-teal-900' : 'text-slate-500'
+                                    hasOffCourse ? 'text-teal-900' : 'text-slate-500'
                                   }`}
                                 >
-                                  {hasStudents ? 'Off-Course' : 'Regular Class'}
+                                  {hasOffCourse ? 'Off-Course' : 'General Class'}
                                 </span>
-                                {hasStudents && (
+                                {hasOffCourse && (
                                   <span className="font-mono tabular-nums text-[11px] font-semibold text-[#0D9488] shrink-0">
-                                    {tickedIds.length}
+                                    {effectiveCount}
                                   </span>
                                 )}
                               </div>
 
-                              {cell.activity.trim() &&
-                                cell.activity.trim().toLowerCase() !== 'off-course' &&
-                                cell.activity.trim().toLowerCase() !== 'regular class' && (
-                                  <div className="text-[11px] text-slate-600 truncate">
-                                    {cell.activity.trim()}
-                                  </div>
-                                )}
+                              {cell.generalSubject.trim() && (
+                                <div className="text-[11px] text-slate-600 truncate">
+                                  General: {cell.generalSubject.trim()}
+                                </div>
+                              )}
 
-                              {hasStudents ? (
+                              {hasOffCourse ? (
                                 <div className="text-[11px] text-slate-700 leading-snug">
                                   <div className="truncate">{studentPreviewNames.join(', ')}</div>
                                   {extraCount > 0 && (
@@ -857,7 +786,7 @@ export const TimetableModule: React.FC = () => {
                                 </div>
                               ) : (
                                 <div className="text-[11px] text-slate-400">
-                                  Click to tick students
+                                  Click to select students
                                 </div>
                               )}
                             </button>
@@ -881,7 +810,7 @@ export const TimetableModule: React.FC = () => {
                   </span>
                   <span className="mx-2 text-slate-300" aria-hidden="true">·</span>
                   <span className="text-slate-500">
-                    Click any student to highlight their Off-Course periods in the grid above
+                    Click any student to highlight their Off-Course periods in the timetable above
                   </span>
                 </div>
                 {zeroPeriodStudentsCount > 0 && (
@@ -939,44 +868,48 @@ export const TimetableModule: React.FC = () => {
           <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600 flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-teal-600 shrink-0" />
             <span>
-              Click <strong>Publish Timetable</strong> after marking Off-Course slots. Students in{' '}
-              <strong>{activeTemplateSemester?.name || 'this semester'}</strong> will see only their
-              active Off-Course periods in daily and weekly reporting; regular class periods are hidden automatically.
+              Click <strong>Publish Timetable</strong> after selecting Off-Course students. Each ticked
+              student will see <strong>Off-Course</strong> (along with their chosen Off-Course subject)
+              in place of that general timetable period.
             </span>
           </div>
         </div>
       )}
 
-      {/* Aliya / PG Period Student Picker Modal */}
+      {/* Period Off-Course Student Picker Modal (Used for ALL stages: Thamheediyya, Aliya, PG) */}
       <Modal
         open={Boolean(pickerCell)}
         title={
           pickerCell
             ? `${DAY_NAMES[pickerCell.day]?.full} (${DAY_NAMES[pickerCell.day]?.ml}) · Period ${pickerCell.period}`
-            : 'Assign Off-Course Students'
+            : 'Select Off-Course Students'
         }
         subtitle={
           pickerCell
             ? `${periodTimings[pickerCell.period - 1]?.start_time || ''} – ${
                 periodTimings[pickerCell.period - 1]?.end_time || ''
-              } · Tick every student who takes Off-Course during this period`
+              } · Ticked students will get Off-Course instead of the general class period`
             : undefined
         }
         onClose={() => setPickerCell(null)}
         maxWidth="lg"
       >
         <div className="space-y-4">
-          {/* Optional Regular Class Reference & Copy From Another Period */}
+          {/* General College Timetable Subject & Copy From Another Period */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-700">
-                Regular Class Subject Note (Optional)
+                General College Period Subject (Optional)
               </label>
               <input
                 type="text"
-                value={pickerActivityNote}
-                onChange={(e) => setPickerActivityNote(e.target.value)}
-                placeholder="e.g. Fiqh, Arabic, History (Admin reference)"
+                value={pickerGeneralSubject}
+                onChange={(e) => setPickerGeneralSubject(e.target.value)}
+                placeholder={
+                  activeStage === 'thamheediyya'
+                    ? 'e.g. Urdu (Replaced by Off-Course)'
+                    : 'e.g. Fiqh, Arabic, History (Replaced by Off-Course)'
+                }
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:border-[#1E3A5F] focus:outline-none"
               />
             </div>
@@ -1015,6 +948,28 @@ export const TimetableModule: React.FC = () => {
             </div>
           </div>
 
+          {/* Thamheediyya One-Click Urdu Helper */}
+          {activeStage === 'thamheediyya' && classStudents.length > 0 && (
+            <div className="rounded-lg border border-teal-200 bg-teal-50/60 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="text-teal-900">
+                <strong>Thamheediyya Urdu Period?</strong> Select all Off-Course students in this
+                class in one click, or tick specific students below.
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setPickerStudentIds(classStudents.map((o) => o.student.id));
+                  if (!pickerGeneralSubject.trim()) {
+                    setPickerGeneralSubject('Urdu');
+                  }
+                }}
+                className="rounded-md bg-[#0D9488] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#0F766E] cursor-pointer whitespace-nowrap shrink-0"
+              >
+                Tick All {classStudents.length} Class Students
+              </button>
+            </div>
+          )}
+
           {/* Search & Scope Controls */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
             <div className="relative flex-1 min-w-[200px]">
@@ -1023,7 +978,7 @@ export const TimetableModule: React.FC = () => {
                 type="text"
                 value={pickerSearch}
                 onChange={(e) => setPickerSearch(e.target.value)}
-                placeholder="Search student name, admission no., or subject..."
+                placeholder="Search student name, admission no., or Off-Course subject..."
                 className="w-full rounded-lg border border-slate-300 pl-8 pr-3 py-1.5 text-xs focus:border-[#1E3A5F] focus:outline-none"
               />
             </div>
@@ -1058,7 +1013,7 @@ export const TimetableModule: React.FC = () => {
           <div className="flex items-center justify-between text-xs">
             <span className="font-mono tabular-nums text-slate-600">
               <strong className="text-[#0D9488]">{pickerStudentIds.length}</strong> student
-              {pickerStudentIds.length === 1 ? '' : 's'} ticked for Off-Course
+              {pickerStudentIds.length === 1 ? '' : 's'} selected for Off-Course
             </span>
             <div className="flex items-center gap-3">
               <button
@@ -1117,9 +1072,11 @@ export const TimetableModule: React.FC = () => {
                       </div>
                       <div className="text-[11px] text-slate-500 mt-0.5 truncate">
                         {opt.subjectsLabel ? (
-                          <span className="text-teal-800 font-medium">{opt.subjectsLabel}</span>
+                          <span className="text-teal-800 font-medium">
+                            Off-Course Subject: {opt.subjectsLabel}
+                          </span>
                         ) : (
-                          <span>No Off-Course subject set</span>
+                          <span>No Off-Course subject recorded</span>
                         )}
                         {opt.student.semester_text && (
                           <>
@@ -1157,7 +1114,7 @@ export const TimetableModule: React.FC = () => {
               onClick={handleApplyStudentPicker}
               className="rounded-lg bg-[#1E3A5F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#162C49] cursor-pointer"
             >
-              Apply to Period ({pickerStudentIds.length})
+              Apply Off-Course ({pickerStudentIds.length} students)
             </button>
           </div>
         </div>
@@ -1167,7 +1124,7 @@ export const TimetableModule: React.FC = () => {
       <Modal
         open={createOpen}
         title="Add Semester Timetable"
-        subtitle="Create a stage-aware weekly timetable for a specific semester or class."
+        subtitle="Create a weekly Off-Course timetable for a specific semester or class."
         onClose={() => setCreateOpen(false)}
         maxWidth="md"
       >
@@ -1206,13 +1163,13 @@ export const TimetableModule: React.FC = () => {
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
             >
               <option value="thamheediyya">
-                Thamheediyya (തംഹീദിയ്യ) — Class-wide Off-Course (Urdu only)
+                Thamheediyya (തംഹീദിയ്യ) — Urdu exemption (select Off-Course students per period)
               </option>
               <option value="aliya">
-                Aliya (ആലിയ) — Tick Off-Course students per period
+                Aliya (ആലിയ) — Any 1 subject exempted (select Off-Course students per period)
               </option>
               <option value="pg">
-                PG (പി.ജി) — Tick Off-Course students per period
+                PG (പി.ജി) — Any 1 subject exempted (select Off-Course students per period)
               </option>
             </select>
             <p className="mt-1 text-[11px] text-slate-500">

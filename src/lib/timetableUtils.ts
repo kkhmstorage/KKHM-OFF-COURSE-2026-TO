@@ -24,25 +24,25 @@ export const ACADEMIC_STAGE_META: Record<
     label: 'Thamheediyya',
     ml: 'തംഹീദിയ്യ',
     display: 'Thamheediyya (തംഹീദിയ്യ)',
-    shortRule: 'Urdu exemption only · Class-wide Off-Course periods',
+    shortRule: 'Urdu exemption · Click period to select Off-Course students',
     adminHint:
-      'Thamheediyya Mode (തംഹീദിയ്യ): Click period cells to mark the class Off-Course (Urdu) periods. Marked periods apply automatically to all Off-Course students in this semester.',
+      'Thamheediyya (തംഹീദിയ്യ): Click any period (e.g. Urdu period) to view the class Off-Course student list and tick the students taking Off-Course in that period.',
   },
   aliya: {
     label: 'Aliya',
     ml: 'ആലിയ',
     display: 'Aliya (ആലിയ)',
-    shortRule: '1 exempted subject per student · Tick students per period',
+    shortRule: 'Any 1 subject exempted · Click period to tick Off-Course students',
     adminHint:
-      'Aliya Mode (ആലിയ): Click any period cell to tick the Off-Course students scheduled during that period. Only ticked students will see that period as Off-Course.',
+      'Aliya (ആലിയ): Click any period cell to view all Off-Course students in this class and tick who replaces that general period with Off-Course.',
   },
   pg: {
     label: 'PG',
     ml: 'പി.ജി',
     display: 'PG (പി.ജി)',
-    shortRule: '1 exempted subject per student · Tick students per period',
+    shortRule: 'Any 1 subject exempted · Click period to tick Off-Course students',
     adminHint:
-      'PG Mode (പി.ജി): Click any period cell to tick the Off-Course students scheduled during that period. Only ticked students will see that period as Off-Course.',
+      'PG (പി.ജി): Click any period cell to view all Off-Course students in this class and tick who replaces that general period with Off-Course.',
   },
 };
 
@@ -231,7 +231,9 @@ export function templateUsesStageOffCourseConfig(slots: TimetableSlot[]): boolea
 
 /**
  * Determines whether a single weekly timetable slot is an active Off-Course
- * period for the specified student under the semester's academic stage rules.
+ * period for the specified student.
+ * - If explicit students are ticked on the slot, ONLY those ticked students get Off-Course (works for all stages).
+ * - For legacy Thamheediyya class-wide slots (is_off_course = true with no explicit IDs), applies to all class students.
  */
 export function isSlotOffCourseForStudent(
   slot: TimetableSlot | undefined,
@@ -245,39 +247,31 @@ export function isSlotOffCourseForStudent(
     // keep previously configured slots active so nothing silently breaks.
     return Boolean(slot.planned_activity?.trim());
   }
-  if (isStagePerStudentTick(stage)) {
-    return Boolean(slot.off_course_student_ids?.includes(studentId));
+  const hasExplicitStudentTicks =
+    Array.isArray(slot.off_course_student_ids) && slot.off_course_student_ids.length > 0;
+  if (hasExplicitStudentTicks) {
+    return slot.off_course_student_ids!.includes(studentId);
   }
-  return Boolean(slot.is_off_course);
+  if (!isStagePerStudentTick(stage) && slot.is_off_course) {
+    return true;
+  }
+  return false;
 }
 
 /**
  * Returns the student-facing label for an active Off-Course slot.
+ * Replaces the general college timetable subject with "Off-Course" + the student's chosen Off-Course subject.
  */
 export function formatOffCourseSlotLabel(
-  slot: TimetableSlot | undefined,
-  stage: AcademicStage,
+  _slot: TimetableSlot | undefined,
+  _stage: AcademicStage,
   studentSubjectLabel?: string
 ): string {
   const cleanSubject = studentSubjectLabel?.trim();
-  const rawLabel = stripSlotFallbackMarker(slot?.planned_activity).trim();
-
-  if (isStagePerStudentTick(stage)) {
-    if (cleanSubject) {
-      return `Off-Course — ${cleanSubject}`;
-    }
-    return rawLabel && rawLabel.toLowerCase() !== 'regular class'
-      ? `Off-Course (${rawLabel})`
-      : 'Off-Course';
+  if (cleanSubject) {
+    return `Off-Course — ${cleanSubject}`;
   }
-
-  // Thamheediyya
-  if (rawLabel && rawLabel.toLowerCase() !== 'off-course' && rawLabel.toLowerCase() !== 'regular class') {
-    return cleanSubject && !rawLabel.toLowerCase().includes(cleanSubject.toLowerCase())
-      ? `${rawLabel} · ${cleanSubject}`
-      : rawLabel;
-  }
-  return cleanSubject ? `Off-Course — ${cleanSubject}` : 'Off-Course';
+  return 'Off-Course';
 }
 
 export function normalizeSemesterMatchKey(value?: string | null): string {
