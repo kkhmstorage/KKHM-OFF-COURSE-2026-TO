@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Edit3, Plus, Search, Trash2, UserCheck, UserCog, UserX } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { formatDisplayDate, getTodayIST } from '../../lib/dateUtils';
+import { formatStudentSubjects } from '../../lib/studentUtils';
 import { dataService } from '../../services/dataService';
 import { Modal, PageHeader, StatusLabel } from '../ui/CommonUI';
 
@@ -412,6 +413,7 @@ export const MentorAssignmentsModule: React.FC = () => {
   const { db, session, activeYear, refresh, notify } = useApp();
   const [selectedMentorId, setSelectedMentorId] = useState('');
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [studentSearch, setStudentSearch] = useState('');
   const [assignedDate, setAssignedDate] = useState(getTodayIST());
   const [saving, setSaving] = useState(false);
 
@@ -421,6 +423,21 @@ export const MentorAssignmentsModule: React.FC = () => {
       .filter((ma) => ma.academic_year_id === activeYear.id)
       .sort((a, b) => Number(b.is_active) - Number(a.is_active));
   }, [db, activeYear]);
+
+  const filteredSelectorStudents = useMemo(() => {
+    if (!db || !activeYear) return [];
+    const q = studentSearch.trim().toLowerCase();
+    if (!q) return db.students;
+    return db.students.filter((stu) => {
+      const sp = db.profiles.find((p) => p.id === stu.profile_id);
+      const subj = formatStudentSubjects(db, stu.id, activeYear.id).toLowerCase();
+      return (
+        (sp?.full_name || '').toLowerCase().includes(q) ||
+        stu.admission_number.toLowerCase().includes(q) ||
+        subj.includes(q)
+      );
+    });
+  }, [db, activeYear, studentSearch]);
 
   if (!db || !session || !activeYear) return null;
 
@@ -519,24 +536,35 @@ export const MentorAssignmentsModule: React.FC = () => {
                   type="button"
                   onClick={() =>
                     setSelectedStudentIds(
-                      selectedStudentIds.length === db.students.length
+                      selectedStudentIds.length === filteredSelectorStudents.length
                         ? []
-                        : db.students.map((s) => s.id)
+                        : filteredSelectorStudents.map((s) => s.id)
                     )
                   }
                   className="text-[11px] font-medium text-[#1E3A5F] hover:underline cursor-pointer"
                 >
-                  {selectedStudentIds.length === db.students.length ? 'Clear All' : 'Select All'}
+                  {selectedStudentIds.length === filteredSelectorStudents.length &&
+                  filteredSelectorStudents.length > 0
+                    ? 'Clear All'
+                    : 'Select All'}
                 </button>
               </div>
+              <input
+                type="text"
+                value={studentSearch}
+                onChange={(e) => setStudentSearch(e.target.value)}
+                placeholder="Search by student name, admission no, or subject..."
+                className="mb-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs focus:border-[#1E3A5F] focus:outline-none"
+              />
               <div className="max-h-60 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
-                {db.students.map((stu) => {
+                {filteredSelectorStudents.map((stu) => {
                   const sp = db.profiles.find((p) => p.id === stu.profile_id);
                   const currentMa = db.mentor_assignments.find(
                     (ma) => ma.student_id === stu.id && ma.academic_year_id === activeYear.id && ma.is_active
                   );
                   const currentMentor = db.mentors.find((m) => m.id === currentMa?.mentor_id);
                   const currentMp = db.profiles.find((p) => p.id === currentMentor?.profile_id);
+                  const subjectsLabel = formatStudentSubjects(db, stu.id, activeYear.id);
                   const checked = selectedStudentIds.includes(stu.id);
                   return (
                     <label
@@ -550,19 +578,29 @@ export const MentorAssignmentsModule: React.FC = () => {
                           type="checkbox"
                           checked={checked}
                           onChange={() => toggleStudent(stu.id)}
-                          className="h-4 w-4 rounded border-slate-300 text-[#1E3A5F]"
+                          className="h-4 w-4 rounded border-slate-300 text-[#1E3A5F] shrink-0"
                         />
                         <div className="min-w-0">
                           <div className="font-medium text-slate-900 truncate">{sp?.full_name}</div>
-                          <div className="text-[11px] font-mono text-slate-500">{stu.admission_number}</div>
+                          <div className="text-[11px] text-slate-500 truncate">
+                            <span className="font-mono">{stu.admission_number}</span>
+                            {subjectsLabel ? (
+                              <span className="text-teal-700 font-medium"> · {subjectsLabel}</span>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
-                      <span className="text-[11px] text-slate-500 truncate max-w-[120px]">
+                      <span className="text-[11px] text-slate-500 truncate max-w-[110px] shrink-0">
                         {currentMp ? currentMp.full_name.split(' ')[0] : 'Unassigned'}
                       </span>
                     </label>
                   );
                 })}
+                {!filteredSelectorStudents.length && (
+                  <div className="px-3 py-6 text-center text-xs text-slate-500">
+                    No students matched your search.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -592,6 +630,7 @@ export const MentorAssignmentsModule: React.FC = () => {
                 <tr>
                   <th className="px-4 py-2.5 font-semibold">Student</th>
                   <th className="px-4 py-2.5 font-semibold">Primary Mentor</th>
+                  <th className="px-4 py-2.5 font-semibold">Subject</th>
                   <th className="px-4 py-2.5 font-semibold">Assigned Date</th>
                   <th className="px-4 py-2.5 font-semibold">Status</th>
                 </tr>
@@ -602,6 +641,9 @@ export const MentorAssignmentsModule: React.FC = () => {
                   const sp = db.profiles.find((p) => p.id === stu?.profile_id);
                   const m = db.mentors.find((x) => x.id === ma.mentor_id);
                   const mp = db.profiles.find((p) => p.id === m?.profile_id);
+                  const subjectsLabel = stu
+                    ? formatStudentSubjects(db, stu.id, activeYear.id)
+                    : '';
                   return (
                     <tr key={ma.id} className="hover:bg-slate-50/70">
                       <td className="px-4 py-3">
@@ -609,7 +651,14 @@ export const MentorAssignmentsModule: React.FC = () => {
                         <div className="text-[11px] font-mono text-slate-500">{stu?.admission_number}</div>
                       </td>
                       <td className="px-4 py-3 text-slate-800 font-medium">{mp?.full_name}</td>
-                      <td className="px-4 py-3 font-mono text-slate-600">
+                      <td className="px-4 py-3 text-slate-700">
+                        {subjectsLabel ? (
+                          <span className="font-medium text-teal-800">{subjectsLabel}</span>
+                        ) : (
+                          <span className="text-slate-400">Not assigned</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-slate-600 whitespace-nowrap">
                         {formatDisplayDate(ma.assigned_date)}
                         {ma.ended_date ? ` → ${formatDisplayDate(ma.ended_date)}` : ''}
                       </td>

@@ -1,0 +1,81 @@
+name: Build Android APK (KKHM AMS)
+
+on:
+  push:
+    branches: ["main", "master"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Java 21 (Required by Capacitor Android)
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build web bundle for Android
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_BASE_PATH: "./"
+        run: npm run build
+
+      - name: Generate and configure Capacitor Android project
+        run: |
+          rm -rf android
+          npx cap add android
+          node scripts/configure-android.mjs
+          npx cap sync android
+
+      - name: Compile Android APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Prepare downloadable APK file
+        run: |
+          mkdir -p release-apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk release-apk/KKHM-AMS-Android.apk
+
+      - name: Upload APK as GitHub Actions Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KKHM-AMS-Android-APK
+          path: release-apk/KKHM-AMS-Android.apk
+          retention-days: 90
+
+      - name: Publish APK to GitHub Releases (Direct Download Link)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-latest
+          name: "KKHM AMS — Android App (Latest APK)"
+          body: |
+            ### KKHM Off-Course Activity Management System — Android App
+            Download **`KKHM-AMS-Android.apk`** below and install it on any Android 7.0+ smartphone.
+
+            - Single unified login for Admin, Mentors, and Students
+            - English & Malayalam Unicode support
+            - Connects automatically to your configured Supabase database
+          files: release-apk/KKHM-AMS-Android.apk
+          make_latest: true
+        continue-on-error: true

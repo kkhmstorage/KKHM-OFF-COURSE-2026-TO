@@ -18,6 +18,7 @@ import {
   getTodayIST,
 } from '../../lib/dateUtils';
 import { dataService } from '../../services/dataService';
+import { getStudentSubjects } from '../../lib/studentUtils';
 import { EmptyState, Modal, PageHeader, StatCard, StatusLabel } from '../ui/CommonUI';
 
 function useMentorScope() {
@@ -44,11 +45,14 @@ function useMentorScope() {
         const enr = db.student_academic_enrollments.find(
           (e) => e.student_id === a.student_id && e.academic_year_id === yearId
         );
+        const subjects = stu ? getStudentSubjects(db, stu.id, yearId) : [];
         return stu && prof
           ? {
               student: stu,
               profile: prof,
               batch: enr?.class_batch || stu.batch_name,
+              subjects,
+              subjectsLabel: subjects.map((s) => s.name).join(', '),
               assignment: a,
             }
           : null;
@@ -194,7 +198,12 @@ export const MentorDashboard: React.FC = () => {
                   <tr key={sub.id} className="hover:bg-slate-50/70">
                     <td className="px-4 py-3">
                       <div className="font-semibold text-slate-900">{st?.profile.full_name}</div>
-                      <div className="text-[11px] font-mono text-slate-500">{st?.student.admission_number}</div>
+                      <div className="text-[11px] text-slate-500">
+                        <span className="font-mono">{st?.student.admission_number}</span>
+                        {st?.subjectsLabel ? (
+                          <span className="text-teal-700 font-medium"> · {st.subjectsLabel}</span>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-4 py-3 font-mono text-slate-700">
                       {sub.approval_mode_snapshot === 'weekly'
@@ -250,7 +259,8 @@ export const MentorStudentsView: React.FC = () => {
     return (
       item.profile.full_name.toLowerCase().includes(q) ||
       item.student.admission_number.toLowerCase().includes(q) ||
-      item.batch.toLowerCase().includes(q)
+      item.batch.toLowerCase().includes(q) ||
+      item.subjectsLabel.toLowerCase().includes(q)
     );
   });
 
@@ -287,7 +297,9 @@ export const MentorStudentsView: React.FC = () => {
 
         <PageHeader
           title={detailItem.profile.full_name}
-          subtitle={`${detailItem.student.admission_number} · ${detailItem.batch} · Academic Year ${activeYear.name}`}
+          subtitle={`${detailItem.student.admission_number} · ${detailItem.batch}${
+            detailItem.subjectsLabel ? ` · Subject: ${detailItem.subjectsLabel}` : ''
+          } · Academic Year ${activeYear.name}`}
         />
 
         <div className="inline-flex flex-wrap gap-1 rounded-lg bg-slate-200/70 p-1 mb-6">
@@ -315,10 +327,34 @@ export const MentorStudentsView: React.FC = () => {
         </div>
 
         {detailTab === 'overview' && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <StatCard label="Approved Periods" value={approvedCnt} tone="success" />
-            <StatCard label="Pending Review Periods" value={pendingCnt} tone="warning" />
-            <StatCard label="Returned Periods" value={returnedCnt} tone="danger" />
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <StatCard label="Approved Periods" value={approvedCnt} tone="success" />
+              <StatCard label="Pending Review Periods" value={pendingCnt} tone="warning" />
+              <StatCard label="Returned Periods" value={returnedCnt} tone="danger" />
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-5">
+              <div className="text-xs font-semibold text-slate-900 mb-2">
+                Selected Subject(s) — {activeYear.name}
+              </div>
+              {detailItem.subjects.length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                  {detailItem.subjects.map((sub) => (
+                    <div key={sub.id} className="py-2 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="font-semibold text-teal-800">{sub.name}</span>
+                        <span className="ml-2 font-mono text-[11px] text-slate-500">{sub.code}</span>
+                      </div>
+                      <span className="text-[11px] text-slate-500">{sub.category}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">
+                  No subject selected yet for this student in {activeYear.name}.
+                </p>
+              )}
+            </div>
           </div>
         )}
 
@@ -435,7 +471,7 @@ export const MentorStudentsView: React.FC = () => {
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search student name, admission no, batch..."
+          placeholder="Search student name, subject, admission no, batch..."
           className="w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 py-2 text-xs"
         />
       </div>
@@ -446,6 +482,7 @@ export const MentorStudentsView: React.FC = () => {
             <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
               <tr>
                 <th className="px-4 py-3 font-semibold">Student Name</th>
+                <th className="px-4 py-3 font-semibold">Subject</th>
                 <th className="px-4 py-3 font-semibold">Admission No.</th>
                 <th className="px-4 py-3 font-semibold">Class / Batch</th>
                 <th className="px-4 py-3 font-semibold">Latest Report Status</th>
@@ -466,6 +503,13 @@ export const MentorStudentsView: React.FC = () => {
                 return (
                   <tr key={item.student.id} className="hover:bg-slate-50/70">
                     <td className="px-4 py-3 font-semibold text-slate-900">{item.profile.full_name}</td>
+                    <td className="px-4 py-3">
+                      {item.subjectsLabel ? (
+                        <span className="font-medium text-teal-800">{item.subjectsLabel}</span>
+                      ) : (
+                        <span className="text-slate-400">Not assigned</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 font-mono text-slate-700">{item.student.admission_number}</td>
                     <td className="px-4 py-3 text-slate-600">{item.batch}</td>
                     <td className="px-4 py-3">
@@ -494,7 +538,7 @@ export const MentorStudentsView: React.FC = () => {
               })}
               {!filtered.length && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
                     No assigned students matched your search.
                   </td>
                 </tr>
@@ -590,7 +634,9 @@ export const MentorReviewModule: React.FC<{
               ? `Week of ${formatDisplayDate(activeSub.start_date)}`
               : formatDateWithDay(activeSub.start_date)
           }`}
-          subtitle={`Admission: ${stInfo?.student.admission_number || '—'} · Mode: ${
+          subtitle={`Admission: ${stInfo?.student.admission_number || '—'}${
+            stInfo?.subjectsLabel ? ` · Subject: ${stInfo.subjectsLabel}` : ''
+          } · Mode: ${
             activeSub.entry_mode_snapshot
           } entry / ${activeSub.approval_mode_snapshot} approval · Student text is immutable during review.`}
           actions={
@@ -816,7 +862,12 @@ export const MentorReviewModule: React.FC<{
                     <tr key={sub.id} className="hover:bg-slate-50/70">
                       <td className="px-4 py-3">
                         <div className="font-semibold text-slate-900">{st?.profile.full_name}</div>
-                        <div className="text-[11px] font-mono text-slate-500">{st?.student.admission_number}</div>
+                        <div className="text-[11px] text-slate-500">
+                          <span className="font-mono">{st?.student.admission_number}</span>
+                          {st?.subjectsLabel ? (
+                            <span className="text-teal-700 font-medium"> · {st.subjectsLabel}</span>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="px-4 py-3 font-mono text-slate-700">
                         {sub.approval_mode_snapshot === 'weekly'

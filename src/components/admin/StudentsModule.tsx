@@ -25,6 +25,7 @@ import {
   type ParsedBulkStudentRow,
 } from '../../lib/exportUtils';
 import { dataService } from '../../services/dataService';
+import { formatStudentSubjects } from '../../lib/studentUtils';
 import { EmptyState, Modal, PageHeader, PaginationBar, StatusLabel } from '../ui/CommonUI';
 
 interface StudentRow {
@@ -38,6 +39,7 @@ interface StudentRow {
   username: string;
   isActive: boolean;
   mentorName: string;
+  subjectsLabel: string;
   enrolledInActiveYear: boolean;
   // CIC Academic & Subject Details
   cicAdNo?: string;
@@ -137,6 +139,7 @@ export const StudentsModule: React.FC = () => {
         username: prof?.username || '',
         isActive: prof?.is_active ?? true,
         mentorName: mentorProf?.full_name || 'Unassigned',
+        subjectsLabel: formatStudentSubjects(db, stu.id, activeYear.id),
         enrolledInActiveYear: Boolean(enr),
         cicAdNo: stu.cic_ad_no,
         clgAdNo: stu.clg_ad_no || stu.admission_number,
@@ -170,7 +173,8 @@ export const StudentsModule: React.FC = () => {
             r.fullName.toLowerCase().includes(q) ||
             r.admissionNumber.toLowerCase().includes(q) ||
             r.username.toLowerCase().includes(q) ||
-            r.mentorName.toLowerCase().includes(q)
+            r.mentorName.toLowerCase().includes(q) ||
+            r.subjectsLabel.toLowerCase().includes(q)
           );
         }
         return true;
@@ -363,7 +367,7 @@ export const StudentsModule: React.FC = () => {
   const handleExportCsv = () => {
     downloadCsv(
       `kkhm-students-${activeYear.name}.csv`,
-      ['Full Name', 'Admission Number', 'Class / Batch', 'Username', 'Email', 'Assigned Mentor', 'Status'],
+      ['Full Name', 'Admission Number', 'Class / Batch', 'Username', 'Email', 'Assigned Mentor', 'Subject', 'Status'],
       filtered.map((r) => [
         r.fullName,
         r.admissionNumber,
@@ -371,6 +375,7 @@ export const StudentsModule: React.FC = () => {
         r.username,
         r.email,
         r.mentorName,
+        r.subjectsLabel || 'Not assigned',
         r.isActive ? 'Active' : 'Inactive',
       ])
     );
@@ -607,6 +612,7 @@ export const StudentsModule: React.FC = () => {
                 <th className="px-4 py-3 font-semibold">Class / Batch</th>
                 <th className="px-4 py-3 font-semibold">Login Username</th>
                 <th className="px-4 py-3 font-semibold">Assigned Mentor ({activeYear.name})</th>
+                <th className="px-4 py-3 font-semibold">Subject</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
                 <th className="px-4 py-3 font-semibold text-right">Actions</th>
               </tr>
@@ -622,6 +628,13 @@ export const StudentsModule: React.FC = () => {
                   <td className="px-4 py-3 text-slate-700">{row.batchName}</td>
                   <td className="px-4 py-3 font-mono text-slate-600">@{row.username}</td>
                   <td className="px-4 py-3 text-slate-700">{row.mentorName}</td>
+                  <td className="px-4 py-3">
+                    {row.subjectsLabel ? (
+                      <span className="font-medium text-teal-800">{row.subjectsLabel}</span>
+                    ) : (
+                      <span className="text-slate-400">Not assigned</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <StatusLabel status={row.isActive ? 'active' : 'inactive'} />
                   </td>
@@ -672,7 +685,7 @@ export const StudentsModule: React.FC = () => {
               ))}
               {!paginated.length && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
                     No students matched your filter criteria.
                   </td>
                 </tr>

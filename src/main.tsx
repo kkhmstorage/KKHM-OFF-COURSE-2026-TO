@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Capacitor } from '@capacitor/core';
 import App from './App.tsx';
 import './index.css';
 
@@ -9,8 +10,12 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>
 );
 
-// Register PWA service worker safely (works on GitHub Pages subpaths via relative ./sw.js)
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+// Register PWA service worker for web browsers only (skip inside native Capacitor Android WebView)
+if (
+  typeof window !== 'undefined' &&
+  'serviceWorker' in navigator &&
+  !Capacitor.isNativePlatform()
+) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('./sw.js')

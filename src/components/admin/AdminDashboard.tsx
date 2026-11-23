@@ -17,6 +17,7 @@ import {
 import { ArrowRight } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { countExpectedPeriodsInRange, formatDisplayDate, getTodayIST, addDays } from '../../lib/dateUtils';
+import { formatStudentSubjects } from '../../lib/studentUtils';
 import { EmptyState, PageHeader, StatCard, StatusLabel } from '../ui/CommonUI';
 
 export const AdminDashboard: React.FC = () => {
@@ -55,7 +56,14 @@ export const AdminDashboard: React.FC = () => {
     const startWindow = addDays(endWindow, -6) < activeYear.start_date ? activeYear.start_date : addDays(endWindow, -6);
 
     let totalScheduled = 0;
-    const studentsMissing: { studentId: string; name: string; admission: string; batch: string; mentorName: string }[] = [];
+    const studentsMissing: {
+      studentId: string;
+      name: string;
+      admission: string;
+      batch: string;
+      mentorName: string;
+      subjectsLabel: string;
+    }[] = [];
 
     for (const sid of enrolledStudentIds) {
       const expected = countExpectedPeriodsInRange({
@@ -82,6 +90,7 @@ export const AdminDashboard: React.FC = () => {
           admission: stu?.admission_number || '—',
           batch: stu?.batch_name || '—',
           mentorName: mProf?.full_name || 'Unassigned',
+          subjectsLabel: formatStudentSubjects(db, sid, yearId),
         });
       }
     }
@@ -564,6 +573,7 @@ export const AdminDashboard: React.FC = () => {
                   <th className="px-4 py-2.5 font-semibold">Student</th>
                   <th className="px-4 py-2.5 font-semibold">Admission No.</th>
                   <th className="px-4 py-2.5 font-semibold">Assigned Mentor</th>
+                  <th className="px-4 py-2.5 font-semibold">Subject</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -572,11 +582,18 @@ export const AdminDashboard: React.FC = () => {
                     <td className="px-4 py-3 font-medium text-slate-900">{s.name}</td>
                     <td className="px-4 py-3 font-mono text-slate-600">{s.admission}</td>
                     <td className="px-4 py-3 text-slate-600">{s.mentorName}</td>
+                    <td className="px-4 py-3">
+                      {s.subjectsLabel ? (
+                        <span className="font-medium text-teal-800">{s.subjectsLabel}</span>
+                      ) : (
+                        <span className="text-slate-400">Not assigned</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {!metrics.studentsMissing.length && (
                   <tr>
-                    <td colSpan={3} className="px-4 py-8 text-center text-emerald-700">
+                    <td colSpan={4} className="px-4 py-8 text-center text-emerald-700">
                       All enrolled students have submitted reports in {activeYear.name}.
                     </td>
                   </tr>
@@ -603,23 +620,34 @@ export const AdminDashboard: React.FC = () => {
               <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
                 <tr>
                   <th className="px-4 py-2.5 font-semibold">Student</th>
-                  <th className="px-4 py-2.5 font-semibold">Date / Week</th>
                   <th className="px-4 py-2.5 font-semibold">Mentor</th>
+                  <th className="px-4 py-2.5 font-semibold">Subject</th>
+                  <th className="px-4 py-2.5 font-semibold">Date / Week</th>
                   <th className="px-4 py-2.5 font-semibold">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {[...metrics.returnedSubmissions, ...metrics.pendingSubmissions].slice(0, 6).map((sub) => (
-                  <tr key={sub.id} className="hover:bg-slate-50/70">
-                    <td className="px-4 py-3 font-medium text-slate-900">{getStudentName(sub.student_id)}</td>
-                    <td className="px-4 py-3 font-mono text-slate-600">{formatDisplayDate(sub.start_date)}</td>
-                    <td className="px-4 py-3 text-slate-600">{getMentorName(sub.mentor_id)}</td>
-                    <td className="px-4 py-3"><StatusLabel status={sub.status} /></td>
-                  </tr>
-                ))}
+                {[...metrics.returnedSubmissions, ...metrics.pendingSubmissions].slice(0, 6).map((sub) => {
+                  const subSubjects = formatStudentSubjects(db, sub.student_id, activeYear.id);
+                  return (
+                    <tr key={sub.id} className="hover:bg-slate-50/70">
+                      <td className="px-4 py-3 font-medium text-slate-900">{getStudentName(sub.student_id)}</td>
+                      <td className="px-4 py-3 text-slate-600">{getMentorName(sub.mentor_id)}</td>
+                      <td className="px-4 py-3">
+                        {subSubjects ? (
+                          <span className="font-medium text-teal-800">{subSubjects}</span>
+                        ) : (
+                          <span className="text-slate-400">Not assigned</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-slate-600">{formatDisplayDate(sub.start_date)}</td>
+                      <td className="px-4 py-3"><StatusLabel status={sub.status} /></td>
+                    </tr>
+                  );
+                })}
                 {metrics.returnedSubmissions.length + metrics.pendingSubmissions.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                    <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
                       No pending or returned submissions.
                     </td>
                   </tr>
