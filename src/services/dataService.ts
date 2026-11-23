@@ -5,10 +5,23 @@ import {
   getEffectiveDaySlots,
   getTodayIST,
 } from '../lib/dateUtils';
+import {
+  encodeSlotFallbackActivity,
+  encodeTemplateStageInDescription,
+  hydrateTimetableSlot,
+  hydrateTimetableTemplate,
+  inferSemesterStage,
+  isValidAcademicStage,
+  readLocalSemesterStageMap,
+  resolveStudentTimetableContext,
+  stripSlotFallbackMarker,
+  writeLocalSemesterStage,
+} from '../lib/timetableUtils';
 import { hashPassword, SEED_PASSWORD_HASHES } from '../lib/cryptoUtils';
 import { getSupabaseClient, isSupabaseConfigured, setSupabaseSessionToken } from '../lib/supabase';
 import type {
   AcademicCalendarException,
+  AcademicStage,
   AcademicYear,
   AcademicYearSettings,
   AppSettings,
@@ -176,6 +189,19 @@ class DataService {
           updated_at: new Date().toISOString(),
         };
 
+        const hydratedTemplates = (timetable_templates.data || []).map(hydrateTimetableTemplate);
+        const hydratedSlots = (timetable_slots.data || []).map(hydrateTimetableSlot);
+        const localStageMap = readLocalSemesterStageMap();
+        const hydratedSemesters: Semester[] = (semesters.data || []).map((sem: Semester) => {
+          const linkedTplStage = hydratedTemplates.find(
+            (t) => t.semester_id === sem.id && isValidAcademicStage(t.academic_stage)
+          )?.academic_stage;
+          const stage = isValidAcademicStage(sem.academic_stage)
+            ? sem.academic_stage
+            : linkedTplStage || localStageMap[sem.id] || inferSemesterStage(sem);
+          return { ...sem, academic_stage: stage };
+        });
+
         return {
           profiles: (profiles.data || []) as Profile[],
           students: students.data || [],
@@ -185,12 +211,12 @@ class DataService {
           academic_year_settings: academic_year_settings.data || [],
           student_academic_enrollments: student_academic_enrollments.data || [],
           mentor_assignments: mentor_assignments.data || [],
-          semesters: semesters.data || [],
+          semesters: hydratedSemesters,
           subjects: subjects.data || [],
           semester_subjects: semester_subjects.data || [],
           student_subject_selections: student_subject_selections.data || [],
-          timetable_templates: timetable_templates.data || [],
-          timetable_slots: timetable_slots.data || [],
+          timetable_templates: hydratedTemplates,
+          timetable_slots: hydratedSlots,
           student_timetable_assignments: student_timetable_assignments.data || [],
           timetable_overrides: timetable_overrides.data || [],
           academic_calendar_exceptions: academic_calendar_exceptions.data || [],
@@ -206,8 +232,15 @@ class DataService {
       }
     }
 
-    // Clone snapshot for React immutability
-    return structuredClone(this.getSandbox());
+    // Clone snapshot for React immutability and ensure stages/slots are hydrated
+    const cloned = structuredClone(this.getSandbox());
+    cloned.timetable_templates = cloned.timetable_templates.map(hydrateTimetableTemplate);
+    cloned.timetable_slots = cloned.timetable_slots.map(hydrateTimetableSlot);
+    cloned.semesters = cloned.semesters.map((s) => ({
+      ...s,
+      academic_stage: inferSemesterStage(s),
+    }));
+    return cloned;
   }
 
   public async login(identifier: string, password: string): Promise<AuthSession> {
@@ -1356,15 +1389,49 @@ class DataService {
     if (payload.end_date <= payload.start_date) {
       throw new Error('Semester end date must be after start date.');
     }
+    const stage: AcademicStage = payload.academic_stage || inferSemesterStage({ name: payload.name });
     if (isSupabaseConfigured()) {
       const sb = getSupabaseClient()!;
-      const { error } = await sb.from('semesters').insert(payload);
-      if (error) throw new Error(error.message);
+      const { data, error } = await sb
+        .from('semesters')
+        .insert({ ...payload, academic_stage: stage })
+        .select('id')
+        .maybeSingle();
+      if (error) {
+        // Zero-downtime fallback if live Supabase table doesn't have academic_stage column yet
+        const missingCol =
+          error.code === '42703' ||
+          error.code === 'PGRST204' ||
+          error.message.toLowerCase().includes('academic_stage');
+        if (missingCol) {
+          const { academic_stage: _ignored, ...legacyPayload } = payload;
+          const { data: legacyData, error: legacyErr } = await sb
+            .from('semesters')
+            .insert(legacyPayload)
+            .select('id')
+            .maybeSingle();
+          if (legacyErr) throw new Error(legacyErr.message);
+          if (legacyData?.id) writeLocalSemesterStage(legacyData.id, stage);
+          return;
+        }
+        throw new Error(error.message);
+      }
+      if (data?.id) writeLocalSemesterStage(data.id, stage);
       return;
     }
     const db = this.getSandbox();
-    db.semesters.push({ ...payload, id: uid('sem'), created_at: new Date().toISOString() });
-    this.appendSandboxAudit(actor, 'SEMESTER_CREATED', 'semester', payload.name, payload);
+    const id = uid('sem');
+    db.semesters.push({
+      ...payload,
+      academic_stage: stage,
+      id,
+      created_at: new Date().toISOString(),
+    });
+    this.appendSandboxAudit(actor, 'SEMESTER_CREATED', 'semester', payload.name, {
+      ...payload,
+      academic_stage: stage,
+    });
+    this.saveSandbox();
   }
 
   public async updateSemesterStatus(actor: Profile, semesterId: string, status: Semester['status']): Promise<void> {
@@ -1377,7 +1444,97 @@ class DataService {
     }
     const db = this.getSandbox();
     const sem = db.semesters.find((s) => s.id === semesterId);
-    if (sem) sem.status = status;
+    if (sem) {
+      sem.status = status;
+      this.saveSandbox();
+    }
+  }
+
+  public async updateSemesterStage(
+    actor: Profile,
+    semesterId: string,
+    academic_stage: AcademicStage
+  ): Promise<void> {
+    this.assertAdmin(actor);
+    if (isSupabaseConfigured()) {
+      const sb = getSupabaseClient()!;
+      writeLocalSemesterStage(semesterId, academic_stage);
+      const { error } = await sb
+        .from('semesters')
+        .update({ academic_stage })
+        .eq('id', semesterId);
+      if (error) {
+        const missingCol =
+          error.code === '42703' ||
+          error.code === 'PGRST204' ||
+          error.message.toLowerCase().includes('academic_stage');
+        if (!missingCol) throw new Error(error.message);
+      }
+      // Also mirror stage marker on linked timetable templates so all browsers see the stage even before SQL migration
+      const { data: linkedTpls } = await sb
+        .from('timetable_templates')
+        .select('id,description')
+        .eq('semester_id', semesterId);
+      if (linkedTpls && linkedTpls.length > 0) {
+        for (const tpl of linkedTpls) {
+          await sb
+            .from('timetable_templates')
+            .update({
+              description: encodeTemplateStageInDescription(tpl.description, academic_stage),
+            })
+            .eq('id', tpl.id);
+        }
+      }
+      return;
+    }
+    const db = this.getSandbox();
+    const sem = db.semesters.find((s) => s.id === semesterId);
+    if (sem) {
+      sem.academic_stage = academic_stage;
+      this.appendSandboxAudit(actor, 'SEMESTER_STAGE_UPDATED', 'semester', sem.name, {
+        academic_stage,
+      });
+      this.saveSandbox();
+    }
+  }
+
+  public async updateTemplateStage(
+    actor: Profile,
+    templateId: string,
+    academic_stage: AcademicStage
+  ): Promise<void> {
+    this.assertAdmin(actor);
+    if (isSupabaseConfigured()) {
+      const sb = getSupabaseClient()!;
+      const { data: tpl } = await sb
+        .from('timetable_templates')
+        .select('id,semester_id,description')
+        .eq('id', templateId)
+        .maybeSingle();
+      if (tpl?.semester_id) {
+        await this.updateSemesterStage(actor, tpl.semester_id, academic_stage);
+      }
+      if (tpl) {
+        const { error } = await sb
+          .from('timetable_templates')
+          .update({
+            description: encodeTemplateStageInDescription(tpl.description, academic_stage),
+          })
+          .eq('id', templateId);
+        if (error) throw new Error(error.message);
+      }
+      return;
+    }
+    const db = this.getSandbox();
+    const tpl = db.timetable_templates.find((t) => t.id === templateId);
+    if (tpl) {
+      tpl.academic_stage = academic_stage;
+      if (tpl.semester_id) {
+        const sem = db.semesters.find((s) => s.id === tpl.semester_id);
+        if (sem) sem.academic_stage = academic_stage;
+      }
+      this.saveSandbox();
+    }
   }
 
   public async deleteSemester(actor: Profile, semesterId: string): Promise<void> {
@@ -1538,10 +1695,20 @@ class DataService {
 
   public async createTimetableTemplate(
     actor: Profile,
-    payload: { academic_year_id: string; semester_id?: string; name: string; description?: string }
+    payload: {
+      academic_year_id: string;
+      semester_id?: string;
+      academic_stage?: AcademicStage;
+      name: string;
+      description?: string;
+    }
   ): Promise<string> {
     this.assertAdmin(actor);
     const now = new Date().toISOString();
+    const descWithStage = payload.academic_stage
+      ? encodeTemplateStageInDescription(payload.description?.trim(), payload.academic_stage)
+      : payload.description?.trim() || null;
+
     if (isSupabaseConfigured()) {
       const sb = getSupabaseClient()!;
       const { data, error } = await sb
@@ -1550,13 +1717,16 @@ class DataService {
           academic_year_id: payload.academic_year_id,
           semester_id: payload.semester_id || null,
           name: payload.name.trim(),
-          description: payload.description?.trim() || null,
+          description: descWithStage,
           is_published: false,
           revision: 1,
         })
         .select()
         .single();
       if (error) throw new Error(error.message);
+      if (payload.semester_id && payload.academic_stage) {
+        await this.updateSemesterStage(actor, payload.semester_id, payload.academic_stage);
+      }
       return data.id;
     }
     const db = this.getSandbox();
@@ -1565,6 +1735,7 @@ class DataService {
       id,
       academic_year_id: payload.academic_year_id,
       semester_id: payload.semester_id,
+      academic_stage: payload.academic_stage,
       name: payload.name.trim(),
       description: payload.description?.trim(),
       is_published: false,
@@ -1572,6 +1743,10 @@ class DataService {
       created_at: now,
       updated_at: now,
     });
+    if (payload.semester_id && payload.academic_stage) {
+      const sem = db.semesters.find((s) => s.id === payload.semester_id);
+      if (sem) sem.academic_stage = payload.academic_stage;
+    }
     const ys = db.academic_year_settings.find((s) => s.academic_year_id === payload.academic_year_id);
     const workingDays = ys?.working_days || [1, 2, 3, 4, 5, 6];
     const pCount = ys?.period_count || 8;
@@ -1586,11 +1761,14 @@ class DataService {
           period_number: p,
           start_time: t.start_time,
           end_time: t.end_time,
-          planned_activity: `Off-Course Activity ${p}`,
+          planned_activity: '',
+          is_off_course: false,
+          off_course_student_ids: [],
         });
       }
     }
     this.appendSandboxAudit(actor, 'TIMETABLE_CREATED', 'timetable_template', id, { name: payload.name });
+    this.saveSandbox();
     return id;
   }
 
@@ -1603,14 +1781,59 @@ class DataService {
     this.assertAdmin(actor);
     const now = new Date().toISOString();
 
+    const normalizedSlots = slots.map((s) => {
+      const studentIds = Array.isArray(s.off_course_student_ids)
+        ? Array.from(new Set(s.off_course_student_ids))
+        : [];
+      const isOffCourse = Boolean(s.is_off_course || studentIds.length > 0);
+      return {
+        ...s,
+        planned_activity: stripSlotFallbackMarker(s.planned_activity),
+        is_off_course: isOffCourse,
+        off_course_student_ids: studentIds,
+      };
+    });
+
     if (isSupabaseConfigured()) {
       const sb = getSupabaseClient()!;
-      for (const s of slots) {
-        const { error } = await sb.from('timetable_slots').upsert(s, {
-          onConflict: 'template_id,day_of_week,period_number',
-        });
-        if (error) throw new Error(error.message);
+      let useFallbackColumnEncoding = false;
+
+      for (const s of normalizedSlots) {
+        if (!useFallbackColumnEncoding) {
+          const { error } = await sb.from('timetable_slots').upsert(s, {
+            onConflict: 'template_id,day_of_week,period_number',
+          });
+          if (error) {
+            const missingCol =
+              error.code === '42703' ||
+              error.code === 'PGRST204' ||
+              error.message.toLowerCase().includes('is_off_course') ||
+              error.message.toLowerCase().includes('off_course_student_ids');
+            if (missingCol) {
+              useFallbackColumnEncoding = true;
+            } else {
+              throw new Error(error.message);
+            }
+          }
+        }
+
+        if (useFallbackColumnEncoding) {
+          const { is_off_course, off_course_student_ids, ...legacySlot } = s;
+          const { error: fbErr } = await sb.from('timetable_slots').upsert(
+            {
+              ...legacySlot,
+              planned_activity: encodeSlotFallbackActivity(
+                s.planned_activity || (is_off_course ? 'Off-Course' : 'Regular Class'),
+                Boolean(is_off_course),
+                off_course_student_ids || []
+              ),
+            },
+            { onConflict: 'template_id,day_of_week,period_number' }
+          );
+          if (fbErr) throw new Error(fbErr.message);
+        }
       }
+
       if (publish) {
         const { data: tpl } = await sb
           .from('timetable_templates')
@@ -1638,7 +1861,7 @@ class DataService {
 
     // Replace slots for this template; past period_activity_entries retain planned_activity_snapshot!
     db.timetable_slots = db.timetable_slots.filter((s) => s.template_id !== templateId);
-    for (const s of slots) {
+    for (const s of normalizedSlots) {
       db.timetable_slots.push({ ...s, id: uid('slot') });
     }
     tpl.updated_at = now;
@@ -1830,7 +2053,30 @@ class DataService {
       dbSnapshot.academic_calendar_exceptions
     );
 
-    // Backend Sequential Locking Enforcement
+    const ttContext = resolveStudentTimetableContext(
+      dbSnapshot,
+      payload.student_id,
+      payload.academic_year_id
+    );
+
+    const hasReportablePeriodsOnDate = (dateStr: string): boolean => {
+      const daySlots = getEffectiveDaySlots(
+        dateStr,
+        payload.student_id,
+        ttContext.templateSlots,
+        dbSnapshot.timetable_overrides,
+        dbSnapshot.academic_calendar_exceptions,
+        ys,
+        {
+          stage: ttContext.stage,
+          onlyOffCourse: true,
+          studentSubjectLabel: ttContext.studentSubjectLabel,
+        }
+      );
+      return daySlots.some((s) => !s.is_cancelled);
+    };
+
+    // Backend Sequential Locking Enforcement (skips days with 0 Off-Course periods)
     const lock = checkSequentialLock({
       targetUnit: unitSpec,
       studentId: payload.student_id,
@@ -1838,6 +2084,7 @@ class DataService {
       settings: ys,
       exceptions: dbSnapshot.academic_calendar_exceptions,
       existingSubmissions: dbSnapshot.report_submissions,
+      hasReportablePeriodsOnDate,
     });
     if (lock.isLocked) {
       throw new Error(lock.reason || 'Sequential reporting lock active.');
@@ -1964,14 +2211,8 @@ class DataService {
       db.report_submissions.unshift(sub);
     }
 
-    // For Weekly Approval mode when submitting, ensure all working dates in that week have entries
-    const ttAssign = db.student_timetable_assignments.find(
-      (a) =>
-        a.student_id === payload.student_id &&
-        a.academic_year_id === payload.academic_year_id &&
-        a.is_active
-    );
-    const tplSlots = ttAssign ? db.timetable_slots.filter((s) => s.template_id === ttAssign.template_id) : [];
+    // Resolve stage-aware timetable slots for this student
+    const tplSlots = ttContext.templateSlots;
 
     for (const entry of payload.entries) {
       const existing = db.period_activity_entries.find(
@@ -1992,7 +2233,12 @@ class DataService {
         tplSlots,
         db.timetable_overrides,
         db.academic_calendar_exceptions,
-        ys
+        ys,
+        {
+          stage: ttContext.stage,
+          onlyOffCourse: true,
+          studentSubjectLabel: ttContext.studentSubjectLabel,
+        }
       );
       const isCancelledByAdmin = daySlots.find((s) => s.period_number === entry.period_number)?.is_cancelled;
       const safeStatus: PeriodActivityStatus = isCancelledByAdmin
@@ -2042,7 +2288,7 @@ class DataService {
     }
 
     if (payload.submit) {
-      // If Weekly Approval mode, verify every working day's required periods in this week are filled!
+      // If Weekly Approval mode, verify every working day's required Off-Course periods in this week are filled!
       if (effectiveApprovalMode === 'weekly') {
         const subEntries = db.period_activity_entries.filter((pe) => pe.submission_id === sub!.id);
         for (const wd of unitSpec.working_dates) {
@@ -2052,7 +2298,12 @@ class DataService {
             tplSlots,
             db.timetable_overrides,
             db.academic_calendar_exceptions,
-            ys
+            ys,
+            {
+              stage: ttContext.stage,
+              onlyOffCourse: true,
+              studentSubjectLabel: ttContext.studentSubjectLabel,
+            }
           ).filter((s) => !s.is_cancelled);
           for (const sl of slots) {
             const match = subEntries.find(
@@ -2060,7 +2311,7 @@ class DataService {
             );
             if (!match || !match.actual_activity.trim()) {
               throw new Error(
-                `Weekly submission incomplete: Missing activity for ${wd} — Period ${sl.period_number} (${sl.planned_activity}). Save as Draft until all scheduled days in the week are recorded.`
+                `Weekly submission incomplete: Missing activity for ${wd} — Period ${sl.period_number} (${sl.planned_activity}). Save as Draft until all scheduled Off-Course periods in the week are recorded.`
               );
             }
           }

@@ -2,6 +2,7 @@ export type UserRole = 'admin' | 'mentor' | 'student';
 
 export type AcademicYearStatus = 'open' | 'closed';
 export type SemesterStatus = 'upcoming' | 'active' | 'closed';
+export type AcademicStage = 'thamheediyya' | 'aliya' | 'pg';
 export type EnrollmentStatus = 'active' | 'completed' | 'withdrawn';
 export type SubjectSelectionStatus = 'selected' | 'not_selected';
 export type WorkflowMode = 'daily' | 'weekly';
@@ -175,6 +176,7 @@ export interface Semester {
   id: string;
   academic_year_id: string;
   name: string;
+  academic_stage?: AcademicStage;
   start_date: string;
   end_date: string;
   status: SemesterStatus;
@@ -210,6 +212,7 @@ export interface TimetableTemplate {
   id: string;
   academic_year_id: string;
   semester_id?: string;
+  academic_stage?: AcademicStage;
   name: string;
   description?: string;
   is_published: boolean;
@@ -228,6 +231,10 @@ export interface TimetableSlot {
   end_time: string;
   subject_id?: string;
   planned_activity: string;
+  /** True when this slot is configured as an Off-Course period (class-wide in Thamheediyya, or has ticked students in Aliya/PG) */
+  is_off_course?: boolean;
+  /** Explicit list of student IDs scheduled for Off-Course in this period (Aliya / PG mode) */
+  off_course_student_ids?: string[];
 }
 
 export interface StudentTimetableAssignment {

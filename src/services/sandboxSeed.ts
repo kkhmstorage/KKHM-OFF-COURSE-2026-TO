@@ -376,12 +376,12 @@ export function createIsolatedSandboxSeed(): DatabaseSnapshot {
   ];
 
   const semesters: Semester[] = [
-    { id: 'sem-24-1', academic_year_id: year2024Id, name: 'Semester 1 (2024-25)', start_date: '2024-06-03', end_date: '2024-10-31', status: 'closed', created_at: '2024-06-01T04:00:00Z' },
-    { id: 'sem-24-2', academic_year_id: year2024Id, name: 'Semester 2 (2024-25)', start_date: '2024-11-01', end_date: '2025-03-31', status: 'closed', created_at: '2024-06-01T04:00:00Z' },
-    { id: 'sem-25-1', academic_year_id: year2025Id, name: 'Semester 3 (2025-26)', start_date: '2025-06-02', end_date: '2025-10-31', status: 'closed', created_at: '2025-06-01T04:00:00Z' },
-    { id: 'sem-25-2', academic_year_id: year2025Id, name: 'Semester 4 (2025-26)', start_date: '2025-11-01', end_date: '2026-03-31', status: 'closed', created_at: '2025-06-01T04:00:00Z' },
-    { id: 'sem-26-1', academic_year_id: year2026Id, name: 'Semester 5 (Odd Term)', start_date: '2026-06-01', end_date: '2026-10-31', status: 'closed', created_at: '2026-05-20T04:00:00Z' },
-    { id: 'sem-26-2', academic_year_id: year2026Id, name: 'Semester 6 (Even Term)', start_date: '2026-11-01', end_date: '2027-03-31', status: 'active', created_at: '2026-05-20T04:00:00Z' },
+    { id: 'sem-24-1', academic_year_id: year2024Id, name: 'Semester 1 (2024-25)', academic_stage: 'thamheediyya', start_date: '2024-06-03', end_date: '2024-10-31', status: 'closed', created_at: '2024-06-01T04:00:00Z' },
+    { id: 'sem-24-2', academic_year_id: year2024Id, name: 'Semester 2 (2024-25)', academic_stage: 'thamheediyya', start_date: '2024-11-01', end_date: '2025-03-31', status: 'closed', created_at: '2024-06-01T04:00:00Z' },
+    { id: 'sem-25-1', academic_year_id: year2025Id, name: 'Semester 3 (2025-26)', academic_stage: 'thamheediyya', start_date: '2025-06-02', end_date: '2025-10-31', status: 'closed', created_at: '2025-06-01T04:00:00Z' },
+    { id: 'sem-25-2', academic_year_id: year2025Id, name: 'Semester 4 (2025-26)', academic_stage: 'thamheediyya', start_date: '2025-11-01', end_date: '2026-03-31', status: 'closed', created_at: '2025-06-01T04:00:00Z' },
+    { id: 'sem-26-1', academic_year_id: year2026Id, name: 'Semester 5 (Odd Term)', academic_stage: 'aliya', start_date: '2026-06-01', end_date: '2026-10-31', status: 'closed', created_at: '2026-05-20T04:00:00Z' },
+    { id: 'sem-26-2', academic_year_id: year2026Id, name: 'Semester 6 (Even Term)', academic_stage: 'aliya', start_date: '2026-11-01', end_date: '2027-03-31', status: 'active', created_at: '2026-05-20T04:00:00Z' },
   ];
 
   const subjects: Subject[] = [

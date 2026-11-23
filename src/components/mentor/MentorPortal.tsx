@@ -19,6 +19,12 @@ import {
 } from '../../lib/dateUtils';
 import { dataService } from '../../services/dataService';
 import { getStudentSubjects } from '../../lib/studentUtils';
+import {
+  ACADEMIC_STAGE_META,
+  formatOffCourseSlotLabel,
+  isSlotOffCourseForStudent,
+  resolveStudentTimetableContext,
+} from '../../lib/timetableUtils';
 import { EmptyState, Modal, PageHeader, StatCard, StatusLabel } from '../ui/CommonUI';
 
 function useMentorScope() {
@@ -275,15 +281,8 @@ export const MentorStudentsView: React.FC = () => {
     const pendingCnt = stEntries.filter((e) => e.approval_status === 'pending').length;
     const returnedCnt = stEntries.filter((e) => e.approval_status === 'returned').length;
 
-    const ttAssign = db.student_timetable_assignments.find(
-      (a) =>
-        a.student_id === detailItem.student.id &&
-        a.academic_year_id === activeYear.id &&
-        a.is_active
-    );
-    const ttSlots = ttAssign
-      ? db.timetable_slots.filter((s) => s.template_id === ttAssign.template_id)
-      : [];
+    const ttContext = resolveStudentTimetableContext(db, detailItem.student.id, activeYear.id);
+    const ttSlots = ttContext.templateSlots;
 
     return (
       <div>
@@ -363,27 +362,55 @@ export const MentorStudentsView: React.FC = () => {
             {!ttSlots.length ? (
               <div className="p-8 text-center text-xs text-slate-500">No timetable assigned yet.</div>
             ) : (
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="px-3 py-2.5 font-semibold">Day</th>
-                    {Array.from({ length: 8 }, (_, i) => (
-                      <th key={i} className="px-3 py-2.5 font-semibold">P{i + 1}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {[1, 2, 3, 4, 5, 6].map((d) => (
-                    <tr key={d}>
-                      <td className="px-3 py-2.5 font-semibold">{DAY_NAMES[d].short}</td>
-                      {Array.from({ length: 8 }, (_, i) => {
-                        const sl = ttSlots.find((s) => s.day_of_week === d && s.period_number === i + 1);
-                        return <td key={i} className="px-3 py-2.5 text-slate-600">{sl?.planned_activity || '—'}</td>;
-                      })}
+              <div>
+                <div className="px-4 py-2.5 border-b border-slate-200 bg-slate-50/70 text-xs text-slate-600 flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    <strong className="text-slate-900">{ttContext.template?.name || 'Timetable'}</strong>
+                    <span className="mx-2 text-slate-300">·</span>
+                    <span>{ACADEMIC_STAGE_META[ttContext.stage].display}</span>
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    Highlighted cells are this student&apos;s scheduled Off-Course periods
+                  </span>
+                </div>
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="px-3 py-2.5 font-semibold">Day</th>
+                      {Array.from({ length: 8 }, (_, i) => (
+                        <th key={i} className="px-3 py-2.5 font-semibold">P{i + 1}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {[1, 2, 3, 4, 5, 6].map((d) => (
+                      <tr key={d}>
+                        <td className="px-3 py-2.5 font-semibold">{DAY_NAMES[d].short}</td>
+                        {Array.from({ length: 8 }, (_, i) => {
+                          const sl = ttSlots.find((s) => s.day_of_week === d && s.period_number === i + 1);
+                          const isOffCourse = isSlotOffCourseForStudent(
+                            sl,
+                            detailItem.student.id,
+                            ttContext.stage,
+                            ttContext.usesStageConfig
+                          );
+                          if (!isOffCourse) {
+                            return <td key={i} className="px-3 py-2.5 text-slate-400">—</td>;
+                          }
+                          const label = ttContext.usesStageConfig
+                            ? formatOffCourseSlotLabel(sl, ttContext.stage, ttContext.studentSubjectLabel)
+                            : sl?.planned_activity || 'Off-Course';
+                          return (
+                            <td key={i} className="px-3 py-2.5 bg-teal-50/60 font-medium text-teal-900">
+                              {label}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         )}

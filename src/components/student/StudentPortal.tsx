@@ -23,6 +23,12 @@ import {
   getWeekDates,
   getWeekStart,
 } from '../../lib/dateUtils';
+import {
+  ACADEMIC_STAGE_META,
+  formatOffCourseSlotLabel,
+  isSlotOffCourseForStudent,
+  resolveStudentTimetableContext,
+} from '../../lib/timetableUtils';
 import { dataService } from '../../services/dataService';
 import type { PeriodActivityStatus } from '../../types/domain';
 import { EmptyState, PageHeader, StatCard, StatusLabel } from '../ui/CommonUI';
@@ -43,68 +49,7 @@ function useStudentScope() {
     const mentor = db.mentors.find((m) => m.id === mentorAssign?.mentor_id);
     const mentorProfile = db.profiles.find((p) => p.id === mentor?.profile_id);
 
-    const studentSemText = (student.semester_text || '').trim();
-
-    // Match student's assigned semester from CIC fields or active semester
-    const studentSemester =
-      (studentSemText &&
-        db.semesters.find(
-          (s) =>
-            s.academic_year_id === yearId &&
-            (s.name.toLowerCase() === studentSemText.toLowerCase() ||
-              s.name.toLowerCase().includes(studentSemText.toLowerCase()) ||
-              s.name.toLowerCase().replace(/[^a-z0-9]/g, '') === studentSemText.toLowerCase().replace(/[^a-z0-9]/g, ''))
-        )) ||
-      db.semesters.find((s) => s.academic_year_id === yearId && s.status === 'active') ||
-      db.semesters.find((s) => s.academic_year_id === yearId);
-
-    const activeSemester = studentSemester ||
-      db.semesters.find((s) => s.academic_year_id === yearId && s.status === 'active') ||
-      db.semesters.find((s) => s.academic_year_id === yearId);
-
-    // Explicit student-level assignment
-    const ttAssign = db.student_timetable_assignments.find(
-      (a) => a.student_id === student.id && a.academic_year_id === yearId && a.is_active
-    );
-
-    // Timetable template resolution:
-    // 1. Explicit assignment
-    // 2. Semester-specific timetable matching student's enrolled semester
-    // 3. Template name containing student semester
-    // 4. Default active published template
-    const template =
-      (ttAssign && db.timetable_templates.find((t) => t.id === ttAssign.template_id)) ||
-      (studentSemester &&
-        db.timetable_templates.find(
-          (t) =>
-            t.academic_year_id === yearId &&
-            t.is_published &&
-            t.semester_id === studentSemester.id
-        )) ||
-      (studentSemester &&
-        db.timetable_templates.find(
-          (t) =>
-            t.academic_year_id === yearId &&
-            t.is_published &&
-            t.name.toLowerCase().includes(studentSemester.name.toLowerCase())
-        )) ||
-      (studentSemText &&
-        db.timetable_templates.find(
-          (t) =>
-            t.academic_year_id === yearId &&
-            t.is_published &&
-            t.name.toLowerCase().includes(studentSemText.toLowerCase())
-        )) ||
-      (studentSemester &&
-        db.timetable_templates.find(
-          (t) => t.academic_year_id === yearId && t.semester_id === studentSemester.id
-        )) ||
-      db.timetable_templates.find((t) => t.academic_year_id === yearId && t.is_published) ||
-      db.timetable_templates.find((t) => t.academic_year_id === yearId);
-
-    const templateSlots = template
-      ? db.timetable_slots.filter((s) => s.template_id === template.id)
-      : [];
+    const ttContext = resolveStudentTimetableContext(db, student.id, yearId);
 
     const submissions = db.report_submissions
       .filter((s) => s.student_id === student.id && s.academic_year_id === yearId)
@@ -118,10 +63,13 @@ function useStudentScope() {
       student,
       enrollment,
       mentorProfile,
-      activeSemester,
-      studentSemesterName: student.semester_text || studentSemester?.name || 'Semester',
-      template,
-      templateSlots,
+      activeSemester: ttContext.semester,
+      studentSemesterName: student.semester_text || ttContext.semester?.name || 'Semester',
+      template: ttContext.template,
+      templateSlots: ttContext.templateSlots,
+      stage: ttContext.stage,
+      usesStageConfig: ttContext.usesStageConfig,
+      studentSubjectLabel: ttContext.studentSubjectLabel,
       submissions,
       entries,
       yearSettings: activeYearSettings,
@@ -165,7 +113,12 @@ export const StudentDashboard: React.FC = () => {
         scope.templateSlots,
         db.timetable_overrides,
         db.academic_calendar_exceptions,
-        scope.yearSettings
+        scope.yearSettings,
+        {
+          stage: scope.stage,
+          onlyOffCourse: true,
+          studentSubjectLabel: scope.studentSubjectLabel,
+        }
       )
     : [];
 
@@ -266,19 +219,23 @@ export const StudentDashboard: React.FC = () => {
             <div className="p-8 text-center text-xs text-slate-600">
               <strong>Non-Working Day:</strong> {todayStatus.reason}. No activity report is required today.
             </div>
+          ) : todaySlots.length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-600">
+              <strong>No Off-Course Periods Today:</strong> You have regular classes only today. No Off-Course activity report is required.
+            </div>
           ) : (
             <div className="divide-y divide-slate-100">
               {todaySlots.map((slot) => (
                 <div key={slot.period_number} className="px-5 py-3 flex items-center justify-between gap-3 text-xs">
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="font-mono font-semibold text-[#1E3A5F] w-14 shrink-0">
+                    <span className="font-mono tabular-nums font-semibold text-[#1E3A5F] w-16 shrink-0">
                       Period {slot.period_number}
                     </span>
                     <div className="min-w-0">
                       <div className={`font-medium truncate ${slot.is_cancelled ? 'line-through text-slate-400' : 'text-slate-900'}`}>
                         {slot.planned_activity}
                       </div>
-                      <div className="text-[11px] font-mono text-slate-500">
+                      <div className="text-[11px] font-mono tabular-nums text-slate-500">
                         {slot.start_time} – {slot.end_time}
                         {slot.is_cancelled ? ` · Cancelled: ${slot.cancellation_reason}` : ''}
                       </div>
@@ -351,19 +308,29 @@ export const StudentTimetableView: React.FC = () => {
     .filter((e) => e.academic_year_id === activeYear.id)
     .slice(0, 6);
 
+  const weeklyOffCourseTotal = workingDays.reduce((acc, day) => {
+    let dayCnt = 0;
+    for (let p = 1; p <= periodCount; p++) {
+      const sl = scope.templateSlots.find((s) => s.day_of_week === day && s.period_number === p);
+      if (isSlotOffCourseForStudent(sl, scope.student.id, scope.stage, scope.usesStageConfig)) {
+        dayCnt += 1;
+      }
+    }
+    return acc + dayCnt;
+  }, 0);
+
   return (
     <div>
       <PageHeader
-        title="My Weekly Timetable"
-        subtitle={
-          scope.template
-            ? `${scope.template.name} · ${scope.studentSemesterName} · Academic Year ${activeYear.name}`
-            : `Academic Year ${activeYear.name} · ${scope.studentSemesterName}`
-        }
+        title="My Weekly Off-Course Timetable"
+        subtitle={`${scope.studentSemesterName} · ${ACADEMIC_STAGE_META[scope.stage].display} · ${weeklyOffCourseTotal} Off-Course period${weeklyOffCourseTotal === 1 ? '' : 's'}/week · Academic Year ${activeYear.name}`}
       />
-      {scope.student.semester_text && (
-        <div className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-200 px-3 py-1 text-xs font-semibold text-indigo-700">
-          Enrolled Semester: {scope.student.semester_text}
+      {scope.studentSubjectLabel && (
+        <div className="mb-4 text-xs text-slate-600">
+          <span className="font-semibold text-slate-800">Off-Course Subject:</span>{' '}
+          <span className="text-teal-800 font-medium">{scope.studentSubjectLabel}</span>
+          <span className="mx-2 text-slate-300" aria-hidden="true">·</span>
+          <span>Only highlighted Off-Course periods appear in your daily reporting form.</span>
         </div>
       )}
 
@@ -397,11 +364,27 @@ export const StudentTimetableView: React.FC = () => {
                       const sl = scope.templateSlots.find(
                         (s) => s.day_of_week === day && s.period_number === idx + 1
                       );
+                      const isOffCourse = isSlotOffCourseForStudent(
+                        sl,
+                        scope.student.id,
+                        scope.stage,
+                        scope.usesStageConfig
+                      );
+                      if (!isOffCourse) {
+                        return (
+                          <td key={idx} className="px-3 py-3 align-top text-slate-400">
+                            —
+                          </td>
+                        );
+                      }
+                      const label = scope.usesStageConfig
+                        ? formatOffCourseSlotLabel(sl, scope.stage, scope.studentSubjectLabel)
+                        : sl?.planned_activity || 'Off-Course';
                       return (
-                        <td key={idx} className="px-3 py-3 align-top">
-                          <div className="font-medium text-slate-800">{sl?.planned_activity || '—'}</div>
+                        <td key={idx} className="px-3 py-3 align-top bg-teal-50/50">
+                          <div className="font-semibold text-teal-900">{label}</div>
                           {sl && (
-                            <div className="text-[10px] font-mono text-slate-500 mt-0.5">
+                            <div className="text-[10px] font-mono tabular-nums text-teal-700/80 mt-0.5">
                               {sl.start_time}–{sl.end_time}
                             </div>
                           )}
@@ -495,7 +478,7 @@ export const StudentActivityReporting: React.FC = () => {
     return [selectedDate];
   }, [effectiveEntryMode, effectiveApprovalMode, workingDatesInWeek, selectedDate]);
 
-  // Hydrate form inputs from persisted backend period entries
+  // Hydrate form inputs from persisted backend period entries (Off-Course periods ONLY)
   useEffect(() => {
     if (!db || !scope) return;
     const next: Record<string, DraftPeriodForm> = {};
@@ -506,7 +489,12 @@ export const StudentActivityReporting: React.FC = () => {
         scope.templateSlots,
         db.timetable_overrides,
         db.academic_calendar_exceptions,
-        scope.yearSettings
+        scope.yearSettings,
+        {
+          stage: scope.stage,
+          onlyOffCourse: true,
+          studentSubjectLabel: scope.studentSubjectLabel,
+        }
       );
       for (const sl of slots) {
         const key = `${d}__${sl.period_number}`;
@@ -536,6 +524,25 @@ export const StudentActivityReporting: React.FC = () => {
     );
   }
 
+  const slotOptions = {
+    stage: scope.stage,
+    onlyOffCourse: true,
+    studentSubjectLabel: scope.studentSubjectLabel,
+  };
+
+  const hasReportablePeriodsOnDate = (dateStr: string): boolean => {
+    const daySlots = getEffectiveDaySlots(
+      dateStr,
+      scope.student.id,
+      scope.templateSlots,
+      db.timetable_overrides,
+      db.academic_calendar_exceptions,
+      scope.yearSettings,
+      slotOptions
+    );
+    return daySlots.some((s) => !s.is_cancelled);
+  };
+
   const unitSpec = buildUnitSpecForDate(
     selectedDate,
     effectiveApprovalMode,
@@ -550,6 +557,7 @@ export const StudentActivityReporting: React.FC = () => {
     settings: scope.yearSettings,
     exceptions: db.academic_calendar_exceptions,
     existingSubmissions: scope.submissions,
+    hasReportablePeriodsOnDate,
   });
 
   const dayWorkStatus = getDayWorkingStatus(
@@ -557,6 +565,23 @@ export const StudentActivityReporting: React.FC = () => {
     scope.yearSettings,
     db.academic_calendar_exceptions
   );
+
+  const totalOffCoursePeriodsVisible = visibleDates.reduce((sum, d) => {
+    const st = getDayWorkingStatus(d, scope.yearSettings, db.academic_calendar_exceptions);
+    if (!st.isWorking) return sum;
+    return (
+      sum +
+      getEffectiveDaySlots(
+        d,
+        scope.student.id,
+        scope.templateSlots,
+        db.timetable_overrides,
+        db.academic_calendar_exceptions,
+        scope.yearSettings,
+        slotOptions
+      ).length
+    );
+  }, 0);
 
   const isReadOnlyUnit =
     lockState.isLocked ||
@@ -584,7 +609,8 @@ export const StudentActivityReporting: React.FC = () => {
           scope.templateSlots,
           db.timetable_overrides,
           db.academic_calendar_exceptions,
-          scope.yearSettings
+          scope.yearSettings,
+          slotOptions
         );
         for (const sl of slots) {
           const key = `${d}__${sl.period_number}`;
@@ -681,6 +707,7 @@ export const StudentActivityReporting: React.FC = () => {
             {weekDates.map((d) => {
               const st = getDayWorkingStatus(d, scope.yearSettings, db.academic_calendar_exceptions);
               const sub = scope.submissions.find((s) => s.start_date <= d && s.end_date >= d);
+              const hasSlots = st.isWorking && hasReportablePeriodsOnDate(d);
               const isSelected = d === selectedDate;
               return (
                 <button
@@ -690,7 +717,7 @@ export const StudentActivityReporting: React.FC = () => {
                   className={`rounded-lg border px-2 py-2 text-left transition-colors cursor-pointer ${
                     isSelected
                       ? 'border-[#1E3A5F] bg-[#1E3A5F] text-white'
-                      : !st.isWorking
+                      : !st.isWorking || !hasSlots
                         ? 'border-slate-100 bg-slate-50 text-slate-400'
                         : 'border-slate-200 bg-white text-slate-800 hover:bg-slate-50'
                   }`}
@@ -700,7 +727,13 @@ export const StudentActivityReporting: React.FC = () => {
                   </div>
                   <div className="text-[11px] font-mono opacity-80">{d.slice(5)}</div>
                   <div className="text-[10px] mt-1 truncate">
-                    {!st.isWorking ? 'Off/Hol' : sub ? sub.status.replace('_', ' ') : 'Open'}
+                    {!st.isWorking
+                      ? 'Off/Hol'
+                      : !hasSlots
+                        ? 'No Off-Course'
+                        : sub
+                          ? sub.status.replace('_', ' ')
+                          : 'Open'}
                   </div>
                 </button>
               );
@@ -746,69 +779,94 @@ export const StudentActivityReporting: React.FC = () => {
         </div>
       )}
 
-      {/* Period-wise Activity Entry Cards */}
+      {/* No Off-Course periods scheduled on working day(s) */}
       {visibleDates.some(
         (d) => getDayWorkingStatus(d, scope.yearSettings, db.academic_calendar_exceptions).isWorking
-      ) && (
-        <div className="space-y-6">
-          {/* Submission Unit Status Header */}
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
-            <div className="text-xs">
-              <span className="font-semibold text-slate-900">
-                {effectiveApprovalMode === 'weekly'
-                  ? `Weekly Unit: ${formatDisplayDate(unitSpec.start_date)} – ${formatDisplayDate(unitSpec.end_date)}`
-                  : `Daily Unit: ${formatDateWithDay(selectedDate)}`}
-              </span>
-              <span className="mx-2 text-slate-300">·</span>
-              <StatusLabel status={existingSubForDate?.status || 'not_started'} />
+      ) &&
+        totalOffCoursePeriodsVisible === 0 && (
+          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+            <Calendar className="h-8 w-8 text-teal-600/60 mx-auto" />
+            <h3 className="mt-3 text-sm font-semibold text-slate-900">
+              No Off-Course Periods Scheduled
+            </h3>
+            <p className="mt-1 text-xs text-slate-600">
+              {visibleDates.length === 1
+                ? `${formatDateWithDay(selectedDate)} has regular classes only. No Off-Course activity report is required for this date.`
+                : 'No Off-Course periods are scheduled for you in this week.'}
+            </p>
+          </div>
+        )}
+
+      {/* Period-wise Activity Entry Cards (Off-Course periods ONLY) */}
+      {visibleDates.some(
+        (d) => getDayWorkingStatus(d, scope.yearSettings, db.academic_calendar_exceptions).isWorking
+      ) &&
+        totalOffCoursePeriodsVisible > 0 && (
+          <div className="space-y-6">
+            {/* Submission Unit Status Header */}
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
+              <div className="text-xs">
+                <span className="font-semibold text-slate-900">
+                  {effectiveApprovalMode === 'weekly'
+                    ? `Weekly Unit: ${formatDisplayDate(unitSpec.start_date)} – ${formatDisplayDate(unitSpec.end_date)}`
+                    : `Daily Unit: ${formatDateWithDay(selectedDate)}`}
+                </span>
+                <span className="mx-2 text-slate-300">·</span>
+                <span className="font-mono tabular-nums text-slate-600">
+                  {totalOffCoursePeriodsVisible} Off-Course period{totalOffCoursePeriodsVisible === 1 ? '' : 's'}
+                </span>
+                <span className="mx-2 text-slate-300">·</span>
+                <StatusLabel status={existingSubForDate?.status || 'not_started'} />
+              </div>
+
+              {!isReadOnlyUnit && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => handleSaveOrSubmit(false)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
+                  >
+                    <Save className="h-3.5 w-3.5" /> Save Draft
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => handleSaveOrSubmit(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#1E3A5F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#162C49] disabled:opacity-50 cursor-pointer"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    {existingSubForDate?.status === 'returned'
+                      ? 'Resubmit Corrected Report'
+                      : effectiveApprovalMode === 'weekly'
+                        ? 'Submit Weekly Report'
+                        : 'Submit Daily Report'}
+                  </button>
+                </div>
+              )}
             </div>
 
-            {!isReadOnlyUnit && (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => handleSaveOrSubmit(false)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
-                >
-                  <Save className="h-3.5 w-3.5" /> Save Draft
-                </button>
-                <button
-                  type="button"
-                  disabled={saving}
-                  onClick={() => handleSaveOrSubmit(true)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#1E3A5F] px-4 py-2 text-xs font-semibold text-white hover:bg-[#162C49] disabled:opacity-50 cursor-pointer"
-                >
-                  <Send className="h-3.5 w-3.5" />
-                  {existingSubForDate?.status === 'returned'
-                    ? 'Resubmit Corrected Report'
-                    : effectiveApprovalMode === 'weekly'
-                      ? 'Submit Weekly Report'
-                      : 'Submit Daily Report'}
-                </button>
-              </div>
-            )}
-          </div>
+            {visibleDates.map((d) => {
+              const st = getDayWorkingStatus(d, scope.yearSettings, db.academic_calendar_exceptions);
+              if (!st.isWorking) return null;
+              const slots = getEffectiveDaySlots(
+                d,
+                scope.student.id,
+                scope.templateSlots,
+                db.timetable_overrides,
+                db.academic_calendar_exceptions,
+                scope.yearSettings,
+                slotOptions
+              );
+              if (!slots.length) return null;
 
-          {visibleDates.map((d) => {
-            const st = getDayWorkingStatus(d, scope.yearSettings, db.academic_calendar_exceptions);
-            if (!st.isWorking) return null;
-            const slots = getEffectiveDaySlots(
-              d,
-              scope.student.id,
-              scope.templateSlots,
-              db.timetable_overrides,
-              db.academic_calendar_exceptions,
-              scope.yearSettings
-            );
+              return (
+                <section key={d} className="space-y-3">
+                  <h2 className="text-sm font-bold text-slate-900 px-1">
+                    {formatDateWithDay(d)}
+                  </h2>
 
-            return (
-              <section key={d} className="space-y-3">
-                <h2 className="text-sm font-bold text-slate-900 px-1">
-                  {formatDateWithDay(d)}
-                </h2>
-
-                {slots.map((slot) => {
+                  {slots.map((slot) => {
                   const key = `${d}__${slot.period_number}`;
                   const persisted = scope.entries.find(
                     (pe) => pe.activity_date === d && pe.period_number === slot.period_number

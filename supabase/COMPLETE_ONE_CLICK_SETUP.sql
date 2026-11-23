@@ -166,6 +166,7 @@ CREATE TABLE IF NOT EXISTS public.semesters (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   academic_year_id UUID NOT NULL REFERENCES public.academic_years(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
+  academic_stage TEXT NOT NULL DEFAULT 'thamheediyya' CHECK (academic_stage IN ('thamheediyya', 'aliya', 'pg')),
   start_date DATE NOT NULL,
   end_date DATE NOT NULL,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('upcoming', 'active', 'closed')),
@@ -174,6 +175,9 @@ CREATE TABLE IF NOT EXISTS public.semesters (
   UNIQUE (academic_year_id, name),
   CONSTRAINT chk_semester_dates CHECK (end_date > start_date)
 );
+
+ALTER TABLE public.semesters
+  ADD COLUMN IF NOT EXISTS academic_stage TEXT NOT NULL DEFAULT 'thamheediyya';
 
 -- 10. subjects
 CREATE TABLE IF NOT EXISTS public.subjects (
@@ -232,10 +236,16 @@ CREATE TABLE IF NOT EXISTS public.timetable_slots (
   end_time TEXT NOT NULL,
   subject_id UUID REFERENCES public.subjects(id) ON DELETE SET NULL,
   planned_activity TEXT NOT NULL,
+  is_off_course BOOLEAN NOT NULL DEFAULT FALSE,
+  off_course_student_ids TEXT[] NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (template_id, day_of_week, period_number)
 );
+
+ALTER TABLE public.timetable_slots
+  ADD COLUMN IF NOT EXISTS is_off_course BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS off_course_student_ids TEXT[] NOT NULL DEFAULT '{}';
 
 -- 15. student_timetable_assignments
 CREATE TABLE IF NOT EXISTS public.student_timetable_assignments (

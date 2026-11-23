@@ -1,5 +1,6 @@
 import type {
   AcademicCalendarException,
+  AcademicStage,
   AcademicYear,
   AcademicYearSettings,
   PeriodTiming,
@@ -7,6 +8,11 @@ import type {
   TimetableOverride,
   TimetableSlot,
 } from '../types/domain';
+import {
+  formatOffCourseSlotLabel,
+  isSlotOffCourseForStudent,
+  templateUsesStageOffCourseConfig,
+} from './timetableUtils';
 
 export const DAY_NAMES: Record<number, { full: string; short: string; ml: string }> = {
   1: { full: 'Monday', short: 'Mon', ml: 'തിങ്കൾ' },
@@ -160,8 +166,15 @@ export interface EffectivePeriodSlot {
   end_time: string;
   planned_activity: string;
   subject_id?: string;
+  is_off_course: boolean;
   is_cancelled: boolean;
   cancellation_reason?: string;
+}
+
+export interface EffectiveSlotOptions {
+  stage?: AcademicStage;
+  onlyOffCourse?: boolean;
+  studentSubjectLabel?: string;
 }
 
 export function getEffectiveDaySlots(
@@ -170,7 +183,8 @@ export function getEffectiveDaySlots(
   templateSlots: TimetableSlot[],
   overrides: TimetableOverride[],
   calendarExceptions: AcademicCalendarException[],
-  settings: AcademicYearSettings | undefined
+  settings: AcademicYearSettings | undefined,
+  options?: EffectiveSlotOptions
 ): EffectivePeriodSlot[] {
   const dow = getDayOfWeekISO(dateStr);
   const periodCount = settings?.period_count || 8;
@@ -178,6 +192,10 @@ export function getEffectiveDaySlots(
     settings?.default_period_timings?.length
       ? settings.default_period_timings
       : getDefaultPeriodTimings(periodCount);
+
+  const stage: AcademicStage = options?.stage || 'thamheediyya';
+  const usesStageConfig = templateUsesStageOffCourseConfig(templateSlots);
+  const onlyOffCourse = Boolean(options?.onlyOffCourse);
 
   const result: EffectivePeriodSlot[] = [];
 
@@ -196,6 +214,13 @@ export function getEffectiveDaySlots(
         (!o.student_id || o.student_id === studentId)
     );
 
+    const isOffCourse =
+      Boolean(override) || isSlotOffCourseForStudent(slot, studentId, stage, usesStageConfig);
+
+    if (onlyOffCourse && !isOffCourse) {
+      continue;
+    }
+
     const cancelException = calendarExceptions.find(
       (e) =>
         e.exception_date === dateStr &&
@@ -205,7 +230,10 @@ export function getEffectiveDaySlots(
     );
 
     const plannedActivity =
-      override?.planned_activity || slot?.planned_activity || `Off-Course Period ${p}`;
+      override?.planned_activity ||
+      (isOffCourse && usesStageConfig
+        ? formatOffCourseSlotLabel(slot, stage, options?.studentSubjectLabel)
+        : slot?.planned_activity || `Off-Course Period ${p}`);
 
     result.push({
       period_number: p,
@@ -213,6 +241,7 @@ export function getEffectiveDaySlots(
       end_time: slot?.end_time || timing.end_time,
       planned_activity: plannedActivity,
       subject_id: slot?.subject_id,
+      is_off_course: isOffCourse,
       is_cancelled: Boolean(cancelException),
       cancellation_reason: cancelException?.title,
     });
@@ -274,8 +303,17 @@ export function checkSequentialLock(params: {
   settings: AcademicYearSettings | undefined;
   exceptions: AcademicCalendarException[];
   existingSubmissions: ReportSubmission[];
+  hasReportablePeriodsOnDate?: (dateStr: string) => boolean;
 }): { isLocked: boolean; blockingUnitKey?: string; blockingLabel?: string; reason?: string } {
-  const { targetUnit, studentId, academicYear, settings, exceptions, existingSubmissions } = params;
+  const {
+    targetUnit,
+    studentId,
+    academicYear,
+    settings,
+    exceptions,
+    existingSubmissions,
+    hasReportablePeriodsOnDate,
+  } = params;
 
   if (academicYear.status === 'closed') {
     return {
@@ -319,7 +357,8 @@ export function checkSequentialLock(params: {
         while (cursor >= earliestSubDate && guard < 30) {
           guard++;
           const st = getDayWorkingStatus(cursor, settings, exceptions);
-          if (st.isWorking) {
+          const hasReportable = !hasReportablePeriodsOnDate || hasReportablePeriodsOnDate(cursor);
+          if (st.isWorking && hasReportable) {
             // Check whether that previous working day is approved (either as daily unit or part of an approved weekly unit)
             const approvedCover = studentSubs.find(
               (s) => s.status === 'approved' && s.start_date <= cursor && s.end_date >= cursor
@@ -347,7 +386,10 @@ export function checkSequentialLock(params: {
         while (prevWeekStart >= getWeekStart(earliestSubDate, settings?.week_start_day || 1) && guard < 12) {
           guard++;
           const prevWeekSpec = buildUnitSpecForDate(prevWeekStart, 'weekly', settings, exceptions);
-          if (prevWeekSpec.working_dates.length > 0) {
+          const reportableWorkingDates = hasReportablePeriodsOnDate
+            ? prevWeekSpec.working_dates.filter((d) => hasReportablePeriodsOnDate(d))
+            : prevWeekSpec.working_dates;
+          if (reportableWorkingDates.length > 0) {
             const approvedWeek = studentSubs.find(
               (s) =>
                 s.status === 'approved' &&
@@ -383,9 +425,22 @@ export function countExpectedPeriodsInRange(params: {
   studentId: string;
   settings: AcademicYearSettings | undefined;
   exceptions: AcademicCalendarException[];
+  templateSlots?: TimetableSlot[];
+  stage?: AcademicStage;
+  overrides?: TimetableOverride[];
 }): number {
-  const { startDate, endDate, studentId, settings, exceptions } = params;
+  const {
+    startDate,
+    endDate,
+    studentId,
+    settings,
+    exceptions,
+    templateSlots,
+    stage,
+    overrides = [],
+  } = params;
   if (!settings || startDate > endDate) return 0;
+  const hasTemplateSlots = Boolean(templateSlots && templateSlots.length > 0);
   let total = 0;
   let cursor = startDate;
   let safety = 0;
@@ -393,14 +448,27 @@ export function countExpectedPeriodsInRange(params: {
     safety++;
     const status = getDayWorkingStatus(cursor, settings, exceptions);
     if (status.isWorking) {
-      const cancelledCount = exceptions.filter(
-        (e) =>
-          e.academic_year_id === settings.academic_year_id &&
-          e.exception_date === cursor &&
-          e.exception_type === 'period_cancellation' &&
-          (!e.student_id || e.student_id === studentId)
-      ).length;
-      total += Math.max(0, settings.period_count - cancelledCount);
+      if (hasTemplateSlots && templateSlots) {
+        const daySlots = getEffectiveDaySlots(
+          cursor,
+          studentId,
+          templateSlots,
+          overrides,
+          exceptions,
+          settings,
+          { stage: stage || 'thamheediyya', onlyOffCourse: true }
+        );
+        total += daySlots.filter((s) => !s.is_cancelled).length;
+      } else {
+        const cancelledCount = exceptions.filter(
+          (e) =>
+            e.academic_year_id === settings.academic_year_id &&
+            e.exception_date === cursor &&
+            e.exception_type === 'period_cancellation' &&
+            (!e.student_id || e.student_id === studentId)
+        ).length;
+        total += Math.max(0, settings.period_count - cancelledCount);
+      }
     }
     cursor = addDays(cursor, 1);
   }

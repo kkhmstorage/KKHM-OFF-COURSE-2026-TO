@@ -18,6 +18,7 @@ import { ArrowRight } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { countExpectedPeriodsInRange, formatDisplayDate, getTodayIST, addDays } from '../../lib/dateUtils';
 import { formatStudentSubjects } from '../../lib/studentUtils';
+import { resolveStudentTimetableContext } from '../../lib/timetableUtils';
 import { EmptyState, PageHeader, StatCard, StatusLabel } from '../ui/CommonUI';
 
 export const AdminDashboard: React.FC = () => {
@@ -66,12 +67,16 @@ export const AdminDashboard: React.FC = () => {
     }[] = [];
 
     for (const sid of enrolledStudentIds) {
+      const ttCtx = resolveStudentTimetableContext(db, sid, yearId);
       const expected = countExpectedPeriodsInRange({
         startDate: startWindow,
         endDate: endWindow,
         studentId: sid,
         settings: activeYearSettings,
         exceptions: db.academic_calendar_exceptions,
+        templateSlots: ttCtx.templateSlots,
+        stage: ttCtx.stage,
+        overrides: db.timetable_overrides,
       });
       totalScheduled += expected;
 
@@ -175,6 +180,7 @@ export const AdminDashboard: React.FC = () => {
       const stu = db.students.find((s) => s.id === sid);
       const prof = db.profiles.find((p) => p.id === stu?.profile_id);
       const sEntries = submittedEntries.filter((pe) => pe.student_id === sid);
+      const ttCtx = resolveStudentTimetableContext(db, sid, yearId);
       const expected = Math.max(
         1,
         countExpectedPeriodsInRange({
@@ -183,6 +189,9 @@ export const AdminDashboard: React.FC = () => {
           studentId: sid,
           settings: activeYearSettings,
           exceptions: db.academic_calendar_exceptions,
+          templateSlots: ttCtx.templateSlots,
+          stage: ttCtx.stage,
+          overrides: db.timetable_overrides,
         })
       );
       const approvedCnt = sEntries.filter((pe) => pe.approval_status === 'approved').length;

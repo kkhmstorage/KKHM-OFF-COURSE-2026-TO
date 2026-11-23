@@ -9,6 +9,7 @@ import {
   getWeekStart,
 } from '../../lib/dateUtils';
 import { downloadCsv, downloadExcel, triggerPrintReport } from '../../lib/exportUtils';
+import { resolveStudentTimetableContext } from '../../lib/timetableUtils';
 import { PageHeader, StatusLabel } from '../ui/CommonUI';
 
 type ReportTab = 'weekly' | 'monthly' | 'semester' | 'students' | 'mentors' | 'detailed';
@@ -94,12 +95,16 @@ export const AdminReportsModule: React.FC = () => {
         const we = addDays(ws, 6);
         let expected = 0;
         for (const st of enrolledStudents) {
+          const ttCtx = resolveStudentTimetableContext(db, st.studentId, effectiveYearId);
           expected += countExpectedPeriodsInRange({
             startDate: ws,
             endDate: we,
             studentId: st.studentId,
             settings: ys,
             exceptions: db.academic_calendar_exceptions,
+            templateSlots: ttCtx.templateSlots,
+            stage: ttCtx.stage,
+            overrides: db.timetable_overrides,
           });
         }
         const entries = allEntries.filter((e) => e.activity_date >= ws && e.activity_date <= we);
@@ -146,12 +151,16 @@ export const AdminReportsModule: React.FC = () => {
 
     // 4. Student Reports
     const studentRows = enrolledStudents.map((st) => {
+      const ttCtx = resolveStudentTimetableContext(db, st.studentId, effectiveYearId);
       const expected = countExpectedPeriodsInRange({
         startDate: weekStart,
         endDate: weekEnd,
         studentId: st.studentId,
         settings: ys,
         exceptions: db.academic_calendar_exceptions,
+        templateSlots: ttCtx.templateSlots,
+        stage: ttCtx.stage,
+        overrides: db.timetable_overrides,
       });
       const entries = allEntries.filter((e) => e.student_id === st.studentId);
       const approved = entries.filter((e) => e.approval_status === 'approved').length;

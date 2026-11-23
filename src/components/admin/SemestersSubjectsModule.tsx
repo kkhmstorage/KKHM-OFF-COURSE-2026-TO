@@ -2,8 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { BookOpen, CheckSquare, Plus, Square, Trash2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { formatDisplayDate } from '../../lib/dateUtils';
+import { ACADEMIC_STAGE_META, inferSemesterStage } from '../../lib/timetableUtils';
 import { dataService } from '../../services/dataService';
-import type { SemesterStatus, Subject, Semester } from '../../types/domain';
+import type { AcademicStage, SemesterStatus, Subject, Semester } from '../../types/domain';
 import { EmptyState, Modal, PageHeader, StatusLabel } from '../ui/CommonUI';
 
 export const SemestersSubjectsModule: React.FC = () => {
@@ -13,6 +14,7 @@ export const SemestersSubjectsModule: React.FC = () => {
   // Semester form
   const [semModal, setSemModal] = useState(false);
   const [semName, setSemName] = useState('');
+  const [semStage, setSemStage] = useState<AcademicStage>('thamheediyya');
   const [semStart, setSemStart] = useState('');
   const [semEnd, setSemEnd] = useState('');
   const [semStatus, setSemStatus] = useState<SemesterStatus>('active');
@@ -59,14 +61,19 @@ export const SemestersSubjectsModule: React.FC = () => {
       await dataService.createSemester(session.profile, {
         academic_year_id: activeYear.id,
         name: semName,
+        academic_stage: semStage,
         start_date: semStart,
         end_date: semEnd,
         status: semStatus,
       });
       await refresh();
-      notify('success', `Semester "${semName}" created under ${activeYear.name}.`);
+      notify(
+        'success',
+        `Semester "${semName}" (${ACADEMIC_STAGE_META[semStage].label}) created under ${activeYear.name}.`
+      );
       setSemModal(false);
       setSemName('');
+      setSemStage('thamheediyya');
     } catch (err) {
       notify('error', err instanceof Error ? err.message : 'Unable to create semester.');
     }
@@ -217,20 +224,56 @@ export const SemestersSubjectsModule: React.FC = () => {
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
               <tr>
-                <th className="px-4 py-3 font-semibold">Semester Name</th>
+                <th className="px-4 py-3 font-semibold">Semester / Class Name</th>
+                <th className="px-4 py-3 font-semibold">Academic Stage (ഘട്ടം)</th>
                 <th className="px-4 py-3 font-semibold">Date Range</th>
                 <th className="px-4 py-3 font-semibold text-right">Mapped Subjects</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold text-right">Change Status</th>
+                <th className="px-4 py-3 font-semibold text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {yearSemesters.map((sem) => {
                 const count = db.semester_subjects.filter((ss) => ss.semester_id === sem.id).length;
+                const stage = inferSemesterStage(sem);
                 return (
                   <tr key={sem.id} className="hover:bg-slate-50/70">
                     <td className="px-4 py-3 font-semibold text-slate-900">{sem.name}</td>
-                    <td className="px-4 py-3 font-mono text-slate-600">
+                    <td className="px-4 py-3">
+                      <select
+                        disabled={activeYear.status === 'closed'}
+                        value={stage}
+                        onChange={async (e) => {
+                          const nextStage = e.target.value as AcademicStage;
+                          try {
+                            await dataService.updateSemesterStage(
+                              session.profile,
+                              sem.id,
+                              nextStage
+                            );
+                            await refresh();
+                            notify(
+                              'success',
+                              `Set ${sem.name} stage to ${ACADEMIC_STAGE_META[nextStage].display}.`
+                            );
+                          } catch (err) {
+                            notify(
+                              'error',
+                              err instanceof Error ? err.message : 'Unable to update stage.'
+                            );
+                          }
+                        }}
+                        className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-800"
+                      >
+                        <option value="thamheediyya">Thamheediyya (തംഹീദിയ്യ)</option>
+                        <option value="aliya">Aliya (ആലിയ)</option>
+                        <option value="pg">PG (പി.ജി)</option>
+                      </select>
+                      <div className="text-[11px] text-slate-500 mt-1">
+                        {ACADEMIC_STAGE_META[stage].shortRule}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 font-mono tabular-nums text-slate-600">
                       {formatDisplayDate(sem.start_date)} – {formatDisplayDate(sem.end_date)}
                     </td>
                     <td className="px-4 py-3 text-right font-mono tabular-nums">{count}</td>
@@ -270,7 +313,7 @@ export const SemestersSubjectsModule: React.FC = () => {
               })}
               {!yearSemesters.length && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
                     No semesters defined for {activeYear.name}.
                   </td>
                 </tr>
@@ -410,6 +453,18 @@ export const SemestersSubjectsModule: React.FC = () => {
                 })}
               </select>
             </div>
+            {(() => {
+              const currentSem = yearSemesters.find((s) => s.id === effectiveSemId);
+              if (!currentSem) return null;
+              const stage = inferSemesterStage(currentSem);
+              return (
+                <div className="ml-auto text-xs text-slate-600">
+                  <strong className="text-[#1E3A5F]">{ACADEMIC_STAGE_META[stage].display}</strong>
+                  <span className="mx-1.5 text-slate-300">·</span>
+                  <span>{ACADEMIC_STAGE_META[stage].shortRule}</span>
+                </div>
+              );
+            })()}
           </div>
 
           <table className="w-full text-left text-xs">
@@ -482,10 +537,37 @@ export const SemestersSubjectsModule: React.FC = () => {
               type="text"
               required
               value={semName}
-              onChange={(e) => setSemName(e.target.value)}
-              placeholder="e.g. Semester 1 (Odd Term)"
+              onChange={(e) => {
+                const val = e.target.value;
+                setSemName(val);
+                setSemStage(inferSemesterStage({ name: val }));
+              }}
+              placeholder="e.g. Semester 1 (Thamheediyya) or Aliya Sem 5"
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700">
+              Academic Stage (ഘട്ടം) *
+            </label>
+            <select
+              value={semStage}
+              onChange={(e) => setSemStage(e.target.value as AcademicStage)}
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+            >
+              <option value="thamheediyya">
+                Thamheediyya (തംഹീദിയ്യ) — Urdu exemption only
+              </option>
+              <option value="aliya">
+                Aliya (ആലിയ) — Any 1 subject exempted per student
+              </option>
+              <option value="pg">
+                PG (പി.ജി) — Any 1 subject exempted per student
+              </option>
+            </select>
+            <p className="mt-1 text-[11px] text-slate-500">
+              {ACADEMIC_STAGE_META[semStage].shortRule}
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

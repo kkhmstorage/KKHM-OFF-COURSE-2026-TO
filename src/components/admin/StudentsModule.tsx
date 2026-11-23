@@ -26,6 +26,12 @@ import {
 } from '../../lib/exportUtils';
 import { dataService } from '../../services/dataService';
 import { formatStudentSubjects } from '../../lib/studentUtils';
+import {
+  ACADEMIC_STAGE_META,
+  formatOffCourseSlotLabel,
+  isSlotOffCourseForStudent,
+  resolveStudentTimetableContext,
+} from '../../lib/timetableUtils';
 import { EmptyState, Modal, PageHeader, PaginationBar, StatusLabel } from '../ui/CommonUI';
 
 interface StudentRow {
@@ -1606,36 +1612,62 @@ export const StudentsModule: React.FC = () => {
             )}
 
             {profileTab === 'timetable' && (() => {
-              const assign = db.student_timetable_assignments.find(
-                (a) => a.student_id === viewedRow.studentId && a.academic_year_id === activeYear.id && a.is_active
-              );
-              const slots = assign ? db.timetable_slots.filter((s) => s.template_id === assign.template_id) : [];
-              if (!assign) {
-                return <EmptyState title="No Timetable Assigned" description={`Assign a timetable template to ${viewedRow.fullName} in the Timetable module.`} />;
+              const ttCtx = resolveStudentTimetableContext(db, viewedRow.studentId, activeYear.id);
+              const slots = ttCtx.templateSlots;
+              if (!ttCtx.template || !slots.length) {
+                return <EmptyState title="No Timetable Assigned" description={`Assign or configure a semester timetable for ${viewedRow.fullName} in the Timetable module.`} />;
               }
               return (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border border-slate-200">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr>
-                        <th className="px-2.5 py-2 font-semibold">Day</th>
-                        {Array.from({ length: 8 }, (_, i) => (
-                          <th key={i} className="px-2.5 py-2 font-semibold">P{i + 1}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {[1, 2, 3, 4, 5, 6].map((d) => (
-                        <tr key={d}>
-                          <td className="px-2.5 py-2 font-semibold text-slate-700">{DAY_NAMES[d].short}</td>
-                          {Array.from({ length: 8 }, (_, i) => {
-                            const sl = slots.find((s) => s.day_of_week === d && s.period_number === i + 1);
-                            return <td key={i} className="px-2.5 py-2 text-slate-600">{sl?.planned_activity || '—'}</td>;
-                          })}
+                <div className="space-y-2">
+                  <div className="text-xs text-slate-600 flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      <strong className="text-slate-900">{ttCtx.template.name}</strong>
+                      <span className="mx-2 text-slate-300">·</span>
+                      <span>{ACADEMIC_STAGE_META[ttCtx.stage].display}</span>
+                    </span>
+                    <span className="text-[11px] text-slate-500">
+                      Highlighted cells show this student&apos;s Off-Course periods
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border border-slate-200">
+                      <thead className="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th className="px-2.5 py-2 font-semibold">Day</th>
+                          {Array.from({ length: 8 }, (_, i) => (
+                            <th key={i} className="px-2.5 py-2 font-semibold">P{i + 1}</th>
+                          ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {[1, 2, 3, 4, 5, 6].map((d) => (
+                          <tr key={d}>
+                            <td className="px-2.5 py-2 font-semibold text-slate-700">{DAY_NAMES[d].short}</td>
+                            {Array.from({ length: 8 }, (_, i) => {
+                              const sl = slots.find((s) => s.day_of_week === d && s.period_number === i + 1);
+                              const isOffCourse = isSlotOffCourseForStudent(
+                                sl,
+                                viewedRow.studentId,
+                                ttCtx.stage,
+                                ttCtx.usesStageConfig
+                              );
+                              if (!isOffCourse) {
+                                return <td key={i} className="px-2.5 py-2 text-slate-400">—</td>;
+                              }
+                              const label = ttCtx.usesStageConfig
+                                ? formatOffCourseSlotLabel(sl, ttCtx.stage, ttCtx.studentSubjectLabel)
+                                : sl?.planned_activity || 'Off-Course';
+                              return (
+                                <td key={i} className="px-2.5 py-2 bg-teal-50/60 font-medium text-teal-900">
+                                  {label}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               );
             })()}
