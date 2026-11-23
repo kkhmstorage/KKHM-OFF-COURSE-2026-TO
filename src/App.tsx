@@ -1,8 +1,7 @@
 import React, { Component, useEffect, useState, type ErrorInfo, type ReactNode } from 'react';
-import { Capacitor } from '@capacitor/core';
-import { App as CapacitorApp } from '@capacitor/app';
 import { Eye, EyeOff, KeyRound } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
+import { exitNativeAndroidApp, registerAndroidBackButton } from './lib/capacitorBridge';
 import { dataService } from './services/dataService';
 import { LoginPage } from './components/LoginPage';
 import { AppShell } from './components/AppShell';
@@ -221,17 +220,13 @@ const AppRouter: React.FC = () => {
 
   // Handle native Android hardware back button inside Capacitor APK
   useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
-    const listenerPromise = CapacitorApp.addListener('backButton', () => {
+    return registerAndroidBackButton(() => {
       if (session && activeRoute !== 'dashboard') {
         navigate('dashboard');
       } else {
-        void CapacitorApp.exitApp();
+        exitNativeAndroidApp();
       }
     });
-    return () => {
-      void listenerPromise.then((handle) => handle.remove());
-    };
   }, [session, activeRoute, navigate]);
 
   const renderRoleView = () => {

@@ -5,7 +5,7 @@ import {
   getEffectiveDaySlots,
   getTodayIST,
 } from '../lib/dateUtils';
-import { hashPassword } from '../lib/cryptoUtils';
+import { hashPassword, SEED_PASSWORD_HASHES } from '../lib/cryptoUtils';
 import { getSupabaseClient, isSupabaseConfigured, setSupabaseSessionToken } from '../lib/supabase';
 import type {
   AcademicCalendarException,
@@ -522,9 +522,9 @@ class DataService {
     db.student_academic_enrollments = db.student_academic_enrollments.filter((e) => e.academic_year_id !== yearId);
     db.report_submissions = db.report_submissions.filter((r) => r.academic_year_id !== yearId);
     db.timetable_templates = db.timetable_templates.filter((t) => t.academic_year_id !== yearId);
-    db.calendar_exceptions = db.calendar_exceptions.filter((c) => c.academic_year_id !== yearId);
+    db.academic_calendar_exceptions = db.academic_calendar_exceptions.filter((c) => c.academic_year_id !== yearId);
     db.student_subject_selections = db.student_subject_selections.filter((s) => s.academic_year_id !== yearId);
-    db.student_mentor_assignments = db.student_mentor_assignments.filter((m) => m.academic_year_id !== yearId);
+    db.mentor_assignments = db.mentor_assignments.filter((m) => m.academic_year_id !== yearId);
     this.appendSandboxAudit(actor, 'ACADEMIC_YEAR_DELETED', 'academic_year', year.name, {});
     this.saveSandbox();
   }

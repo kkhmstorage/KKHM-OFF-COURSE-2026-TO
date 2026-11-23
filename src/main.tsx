@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Capacitor } from '@capacitor/core';
+import { isNativeCapacitor } from './lib/capacitorBridge';
 import App from './App.tsx';
 import './index.css';
 
@@ -14,16 +14,11 @@ createRoot(document.getElementById('root')!).render(
 if (
   typeof window !== 'undefined' &&
   'serviceWorker' in navigator &&
-  !Capacitor.isNativePlatform()
+  !isNativeCapacitor()
 ) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('./sw.js')
-      .then((reg) => {
-        reg.update();
-      })
-      .catch(() => {
-        // Silently ignore in restricted preview iframes or non-HTTPS local contexts
-      });
+    navigator.serviceWorker.register('./sw.js').catch(() => {
+      // Silently ignore in restricted preview iframes or non-HTTPS local contexts
+    });
   });
 }
