@@ -441,23 +441,35 @@ const StageModal: React.FC<{ student: Student; onClose: () => void }> = ({ stude
 const SelectionModal: React.FC<{ student: Student; onClose: () => void }> = ({ student, onClose }) => {
   const { db, session, activeYear, notify, refresh } = useApp();
   const stage = student.academic_stage as AcademicStage;
+  const isTham = stage === 'thamheediyya';
   const [semester, setSemester] = useState<number>(student.stage_semester_no || 1);
   const [period, setPeriod] = useState<'' | 'Nov' | 'May'>('');
+  // Thamheediyya: Urdu subject picked from the course chart (listed by stage + semester)
   const [subjectId, setSubjectId] = useState('');
-  const [rtype, setRtype] = useState<SelectionDraft['replacement_type']>(stage === 'thamheediyya' ? 'pool' : 'off_course');
+  const [urduCode, setUrduCode] = useState('');
+  // Aliya / PG: opted-out subject typed in (code + name + credit)
+  const [optCode, setOptCode] = useState('');
+  const [optName, setOptName] = useState('');
+  const [optCredit, setOptCredit] = useState('');
+  const [rtype, setRtype] = useState<SelectionDraft['replacement_type']>(isTham ? 'pool' : 'off_course');
   const [poolId, setPoolId] = useState('');
   const [proposalId, setProposalId] = useState('');
-  const [idcId, setIdcId] = useState('');
+  const [idcCode, setIdcCode] = useState('');
+  const [idcName, setIdcName] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   if (!db || !session || !activeYear) return null;
 
-  const candidates = db.subjects.filter(
+  const urduChoices = db.subjects.filter(
     (s) =>
       s.is_active !== false &&
-      (!s.academic_stage || s.academic_stage === stage) &&
-      (!s.semester_no || s.semester_no === semester) &&
-      (stage === 'thamheediyya' ? s.is_urdu : s.course_type === 'elective')
+      s.is_urdu &&
+      (!s.academic_stage || s.academic_stage === 'thamheediyya') &&
+      (!s.semester_no || s.semester_no === semester)
+  );
+  // suggestions while typing (Aliya / PG): subjects of this stage + semester already in the chart
+  const stageSemSubjects = db.subjects.filter(
+    (s) => s.is_active !== false && s.academic_stage === stage && (!s.semester_no || s.semester_no === semester)
   );
   const pool = db.offcourse_pool_items.filter((p) => p.is_active);
   const myProposals = db.offcourse_proposals.filter(
@@ -467,29 +479,107 @@ const SelectionModal: React.FC<{ student: Student; onClose: () => void }> = ({ s
       p.status !== 'withdrawn' &&
       db.offcourse_proposal_members.some((m) => m.proposal_id === p.id && m.student_id === student.id)
   );
-  const idcSubjects = db.subjects.filter((s) => s.course_type === 'interdisciplinary' || (s.academic_stage && s.academic_stage !== stage) || (s.semester_no && s.semester_no !== semester));
+
+  const onOptCode = (v: string) => {
+    setOptCode(v);
+    const hit = stageSemSubjects.find((s) => s.code.trim().toUpperCase() === v.trim().toUpperCase());
+    if (hit) {
+      if (!optName.trim()) setOptName(hit.name);
+      if (!optCredit && hit.credit) setOptCredit(String(hit.credit));
+    }
+  };
+
+  // For checking the rules before saving, put the typed subject into a copy of the data
+  const TYPED_ID = '__typed_subject__';
+  const typedReady = !isTham && optCode.trim() !== '' && optName.trim() !== '';
+  const checkDb: DatabaseSnapshot = typedReady
+    ? {
+        ...db,
+        subjects: [
+          ...db.subjects,
+          {
+            id: TYPED_ID,
+            code: optCode.trim().toUpperCase(),
+            name: optName.trim(),
+            category: 'elective',
+            is_active: true,
+            created_at: '',
+            academic_stage: stage,
+            semester_no: semester,
+            course_type: 'elective',
+            is_urdu: false,
+            credit: Number(optCredit) || 0,
+          },
+        ],
+      }
+    : db;
+  const effectiveSubjectId = isTham ? subjectId : typedReady ? TYPED_ID : '';
+  const idcReady = idcCode.trim() !== '' && idcName.trim() !== '';
 
   const draft: SelectionDraft = {
     student_id: student.id,
     academic_stage: stage,
     semester_no: semester,
-    opted_out_subject_id: subjectId,
+    opted_out_subject_id: effectiveSubjectId,
     replacement_type: rtype,
     pool_item_id: poolId || null,
     proposal_id: proposalId || null,
-    interdisciplinary_subject_id: idcId || null,
+    // real id is resolved on save; any non-empty value passes the "chosen" check
+    interdisciplinary_subject_id: rtype === 'interdisciplinary' && idcReady ? '__typed_idc__' : null,
     notes,
   };
-  const problems = subjectId ? validateSelection(db, draft) : [];
+  const problems = effectiveSubjectId ? validateSelection(checkDb, draft) : [];
   const cap = STAGE_CREDIT_CAP[stage];
   const used = creditsUsed(db, student.id, stage);
-  const chosen = db.subjects.find((s) => s.id === subjectId);
+
+  const addUrdu = async () => {
+    try {
+      const id = await dataService.ensureCourseSubject(session.profile, {
+        code: urduCode,
+        name: 'URDU',
+        mode: 'opt_out',
+        academic_stage: 'thamheediyya',
+        semester_no: semester,
+        course_type: 'core',
+        is_urdu: true,
+        credit: 0,
+      });
+      await refresh();
+      setSubjectId(id);
+      notify('success', 'ഉറുദു വിഷയം കോഴ്സ് ചാർട്ടിൽ ചേർത്തു.');
+    } catch (err) {
+      notify('error', errMsg(err));
+    }
+  };
 
   const save = async () => {
     setSaving(true);
     try {
+      let optId = subjectId;
+      if (!isTham) {
+        optId = await dataService.ensureCourseSubject(session.profile, {
+          code: optCode,
+          name: optName,
+          mode: 'opt_out',
+          academic_stage: stage,
+          semester_no: semester,
+          course_type: 'elective',
+          credit: Number(optCredit) || 0,
+        });
+      }
+      let idcId: string | null = null;
+      if (rtype === 'interdisciplinary') {
+        idcId = await dataService.ensureCourseSubject(session.profile, {
+          code: idcCode,
+          name: idcName,
+          mode: 'reference',
+          course_type: 'interdisciplinary',
+        });
+      }
       await dataService.saveOffCourseSelection(session.profile, {
         ...draft,
+        opted_out_subject_id: optId,
+        interdisciplinary_subject_id: idcId,
         academic_year_id: activeYear.id,
         semester_period: period || null,
       });
@@ -502,6 +592,8 @@ const SelectionModal: React.FC<{ student: Student; onClose: () => void }> = ({ s
       setSaving(false);
     }
   };
+
+  const optCreditNum = Number(optCredit) || 0;
 
   return (
     <Modal
@@ -530,31 +622,82 @@ const SelectionModal: React.FC<{ student: Student; onClose: () => void }> = ({ s
             <option value="May">May</option>
           </select>
         </label>
-        <label className="text-xs font-medium text-slate-700 col-span-2">
-          ഒഴിവാക്കുന്ന വിഷയം {stage === 'thamheediyya' ? '(ഉറുദു)' : '(ഇലക്ടീവ്)'}
-          <select className={inputCls} value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
-            <option value="">— തിരഞ്ഞെടുക്കുക —</option>
-            {candidates.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.code} — {s.name} ({s.credit || 0} cr)
-              </option>
-            ))}
-          </select>
-          {!candidates.length && (
-            <span className="mt-1 block text-[11px] text-amber-700">
-              കോഴ്സ് ചാർട്ടിൽ ഈ സെമസ്റ്ററിന്റെ {stage === 'thamheediyya' ? 'ഉറുദു' : 'ഇലക്ടീവ്'} വിഷയം ചേർക്കുക ("കോഴ്സ് ചാർട്ട്" ടാബ്).
-            </span>
-          )}
-        </label>
 
-        {stage !== 'thamheediyya' && (
-          <label className="text-xs font-medium text-slate-700 col-span-2">
-            പകരം
-            <select className={inputCls} value={rtype} onChange={(e) => setRtype(e.target.value as SelectionDraft['replacement_type'])}>
-              <option value="off_course">Off Course (അംഗീകൃത പ്രൊപ്പോസൽ)</option>
-              <option value="interdisciplinary">Interdisciplinary (സിലബസിലെ മറ്റൊരു വിഷയം)</option>
+        {isTham ? (
+          <div className="col-span-2 text-xs font-medium text-slate-700">
+            ഒഴിവാക്കുന്ന വിഷയം (ഉറുദു · സെമസ്റ്റർ {semester})
+            <select className={inputCls} value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+              <option value="">— തിരഞ്ഞെടുക്കുക —</option>
+              {urduChoices.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.code} — {s.name}
+                </option>
+              ))}
             </select>
-          </label>
+            {!urduChoices.length && (
+              <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5">
+                <div className="text-[11px] text-amber-800">
+                  സെമസ്റ്റർ {semester}-ന്റെ ഉറുദു വിഷയം കോഴ്സ് ചാർട്ടിൽ ഇല്ല. അതിന്റെ കോഡ് നൽകി ഇവിടെ നിന്ന് തന്നെ ചേർക്കാം:
+                </div>
+                <div className="mt-1.5 flex gap-2">
+                  <input
+                    className={`${inputCls} mt-0`}
+                    value={urduCode}
+                    onChange={(e) => setUrduCode(e.target.value)}
+                    placeholder={`ഉറുദു പേപ്പറിന്റെ കോഡ് (ഉദാ: THB${semester}M15)`}
+                  />
+                  <button type="button" className={btnPrimary} onClick={addUrdu} disabled={!urduCode.trim()}>
+                    ചേർക്കുക
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="col-span-2 text-xs font-semibold text-slate-800">ഒഴിവാക്കുന്ന വിഷയം (ഇലക്ടീവ്)</div>
+            <label className="text-xs font-medium text-slate-700">
+              വിഷയ കോഡ്
+              <input
+                className={inputCls}
+                value={optCode}
+                onChange={(e) => onOptCode(e.target.value)}
+                list="oc-opt-codes"
+                placeholder="ഉദാ: ALB3E02"
+              />
+              <datalist id="oc-opt-codes">
+                {stageSemSubjects.map((s) => (
+                  <option key={s.id} value={s.code}>
+                    {s.name}
+                  </option>
+                ))}
+              </datalist>
+            </label>
+            <label className="text-xs font-medium text-slate-700">
+              ക്രെഡിറ്റ്
+              <input
+                className={inputCls}
+                type="number"
+                min={0.5}
+                max={cap}
+                step={0.5}
+                value={optCredit}
+                onChange={(e) => setOptCredit(e.target.value)}
+                placeholder="ഉദാ: 1.5"
+              />
+            </label>
+            <label className="text-xs font-medium text-slate-700 col-span-2">
+              വിഷയത്തിന്റെ പേര്
+              <input className={inputCls} value={optName} onChange={(e) => setOptName(e.target.value)} placeholder="സിലബസിലെ പേര് അതുപോലെ" />
+            </label>
+            <label className="text-xs font-medium text-slate-700 col-span-2">
+              പകരം
+              <select className={inputCls} value={rtype} onChange={(e) => setRtype(e.target.value as SelectionDraft['replacement_type'])}>
+                <option value="off_course">Off Course (അംഗീകൃത പ്രൊപ്പോസൽ)</option>
+                <option value="interdisciplinary">Interdisciplinary (സിലബസിലെ മറ്റൊരു വിഷയം)</option>
+              </select>
+            </label>
+          </>
         )}
 
         {rtype === 'pool' && (
@@ -589,18 +732,16 @@ const SelectionModal: React.FC<{ student: Student; onClose: () => void }> = ({ s
           </label>
         )}
         {rtype === 'interdisciplinary' && (
-          <label className="text-xs font-medium text-slate-700 col-span-2">
-            ഇന്റർഡിസിപ്ലിനറി വിഷയം
-            <select className={inputCls} value={idcId} onChange={(e) => setIdcId(e.target.value)}>
-              <option value="">— തിരഞ്ഞെടുക്കുക —</option>
-              {idcSubjects.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.code} — {s.name}
-                  {s.academic_stage ? ` (${s.academic_stage} ${s.semester_no || ''})` : ''}
-                </option>
-              ))}
-            </select>
-          </label>
+          <>
+            <label className="text-xs font-medium text-slate-700">
+              പകരം വിഷയ കോഡ്
+              <input className={inputCls} value={idcCode} onChange={(e) => setIdcCode(e.target.value)} placeholder="മറ്റൊരു ഡിപ്പാർട്ട്മെന്റിന്റെ കോഡ്" />
+            </label>
+            <label className="text-xs font-medium text-slate-700">
+              പകരം വിഷയത്തിന്റെ പേര്
+              <input className={inputCls} value={idcName} onChange={(e) => setIdcName(e.target.value)} />
+            </label>
+          </>
         )}
         <label className="text-xs font-medium text-slate-700 col-span-2">
           കുറിപ്പ് (Notes)
@@ -608,9 +749,9 @@ const SelectionModal: React.FC<{ student: Student; onClose: () => void }> = ({ s
         </label>
       </div>
 
-      {chosen && cap && (
+      {!isTham && typedReady && cap && (
         <div className="mt-3 text-[11px] text-slate-600">
-          ഇത് സേവ് ചെയ്താൽ: {used + Number(chosen.credit || 0)} / {cap} ക്രെഡിറ്റ്
+          ഇത് സേവ് ചെയ്താൽ: {used + optCreditNum} / {cap} ക്രെഡിറ്റ്
         </div>
       )}
       {problems.length > 0 && (
@@ -624,7 +765,7 @@ const SelectionModal: React.FC<{ student: Student; onClose: () => void }> = ({ s
         <button type="button" className={btn} onClick={onClose}>
           റദ്ദാക്കുക
         </button>
-        <button type="button" className={btnPrimary} onClick={save} disabled={saving || !subjectId || problems.length > 0}>
+        <button type="button" className={btnPrimary} onClick={save} disabled={saving || !effectiveSubjectId || problems.length > 0}>
           സേവ്
         </button>
       </div>
