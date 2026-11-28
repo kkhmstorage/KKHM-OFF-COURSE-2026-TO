@@ -94,7 +94,7 @@ export const StudentsModule: React.FC = () => {
   const [semesterText, setSemesterText] = useState('Semester 1');
   const [semesterPeriod, setSemesterPeriod] = useState<'Nov' | 'May'>('Nov');
   const [courseStream, setCourseStream] = useState<string>('Wafy');
-  const [collegeName, setCollegeName] = useState('KKHM Islamic & Arts College');
+  const [collegeName, setCollegeName] = useState(db?.app_settings.institution_name || '');
 
   // CIC Subject Details State
   const [subjectTitle, setSubjectTitle] = useState('');
@@ -213,7 +213,7 @@ export const StudentsModule: React.FC = () => {
     setSemesterText('Semester 1');
     setSemesterPeriod('Nov');
     setCourseStream('Wafy');
-    setCollegeName('KKHM Islamic & Arts College');
+    setCollegeName(db?.app_settings.institution_name || '');
     // Reset Subject Details
     setSubjectTitle('');
     setProposalAppNo('');
@@ -242,7 +242,7 @@ export const StudentsModule: React.FC = () => {
     setSemesterText(row.semesterText || 'Semester 1');
     setSemesterPeriod((row.semesterPeriod === 'May' ? 'May' : 'Nov') as 'Nov' | 'May');
     setCourseStream(row.courseStream || 'Wafy');
-    setCollegeName(row.collegeName || 'KKHM Islamic & Arts College');
+    setCollegeName(row.collegeName || db?.app_settings.institution_name || '');
     // Populate Subject Details
     setSubjectTitle(row.subjectTitle || '');
     setProposalAppNo(row.proposalAppNo || '');
@@ -296,7 +296,7 @@ export const StudentsModule: React.FC = () => {
           email: finalEmail,
           phone,
           username: finalUsername,
-          password: password || 'Student@2026',
+          password,
           academic_year_id: activeYear.id,
           is_active: isActive,
           cic_ad_no: cicAdNo,
@@ -408,7 +408,7 @@ export const StudentsModule: React.FC = () => {
       if (!r.full_name) issues.push('Missing Full Name');
       if (!r.admission_number) issues.push('Missing Admission No.');
       if (!r.username) issues.push('Missing Username');
-      if (!r.password || r.password.length < 6) issues.push('Password min 6 chars');
+      if (!r.password || r.password.length < 8) issues.push('Password min 8 chars');
 
       const admKey = r.admission_number.toLowerCase();
       const userKey = r.username.toLowerCase();
@@ -984,14 +984,14 @@ export const StudentsModule: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700">
-                  {editingId ? 'Reset Password (optional)' : 'Initial Password * (min 6 chars)'}
+                  {editingId ? 'Reset Password (optional)' : 'Initial Password * (min 8 chars)'}
                 </label>
                 <input
                   type="text"
                   required={!editingId}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder={editingId ? 'Leave blank to keep current' : 'e.g. Student@2026'}
+                  placeholder={editingId ? 'Leave blank to keep current' : 'Min 8 characters, unique per student'}
                   className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-mono focus:border-[#1E3A5F] focus:outline-none"
                 />
               </div>
@@ -1437,7 +1437,7 @@ export const StudentsModule: React.FC = () => {
                               College Affl. &amp; Name
                             </td>
                             <td colSpan={3} className="px-3.5 py-2 text-slate-800 font-medium">
-                              {viewedRow.collegeName || 'KKHM Islamic & Arts College'}
+                              {viewedRow.collegeName || db.app_settings.institution_name}
                             </td>
                           </tr>
                         </tbody>

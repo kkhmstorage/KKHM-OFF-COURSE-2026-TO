@@ -354,7 +354,7 @@ export const MentorsModule: React.FC = () => {
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700">
-                {editingId ? 'Reset Password (optional)' : 'Initial Password * (min 6 chars)'}
+                {editingId ? 'Reset Password (optional)' : 'Initial Password * (min 8 chars)'}
               </label>
               <input
                 type="text"
