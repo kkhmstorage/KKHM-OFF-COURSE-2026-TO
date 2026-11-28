@@ -32,6 +32,7 @@ import {
 import { dataService } from '../../services/dataService';
 import type { PeriodActivityStatus } from '../../types/domain';
 import { EmptyState, PageHeader, StatCard, StatusLabel } from '../ui/CommonUI';
+import { StudentTimetableGrid } from '../shared/StudentTimetableGrid';
 
 function useStudentScope() {
   const { db, session, activeYear, activeYearSettings } = useApp();
@@ -323,6 +324,15 @@ export const StudentTimetableView: React.FC = () => {
     <div>
       <PageHeader
         title="My Weekly Off-Course Timetable"
+        actions={
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="no-print rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
+          >
+            Print / PDF
+          </button>
+        }
         subtitle={`${scope.studentSemesterName} · ${ACADEMIC_STAGE_META[scope.stage].display} · ${weeklyOffCourseTotal} Off-Course period${weeklyOffCourseTotal === 1 ? '' : 's'}/week · Academic Year ${activeYear.name}`}
       />
       {scope.studentSubjectLabel && (
@@ -341,68 +351,13 @@ export const StudentTimetableView: React.FC = () => {
         />
       ) : (
         <div className="space-y-6">
-          <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-700 border-b border-slate-200">
-                <tr>
-                  <th className="px-3 py-3 font-semibold min-w-[110px]">Day</th>
-                  {Array.from({ length: periodCount }, (_, idx) => (
-                    <th key={idx} className="px-3 py-3 font-semibold min-w-[140px]">
-                      Period {idx + 1}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {workingDays.map((day) => (
-                  <tr key={day} className="hover:bg-slate-50/70">
-                    <td className="px-3 py-3 font-semibold text-slate-900">
-                      <div>{DAY_NAMES[day]?.full}</div>
-                      <div className="text-[11px] font-normal text-slate-500">{DAY_NAMES[day]?.ml}</div>
-                    </td>
-                    {Array.from({ length: periodCount }, (_, idx) => {
-                      const sl = scope.templateSlots.find(
-                        (s) => s.day_of_week === day && s.period_number === idx + 1
-                      );
-                      const isOffCourse = isSlotOffCourseForStudent(
-                        sl,
-                        scope.student.id,
-                        scope.stage,
-                        scope.usesStageConfig
-                      );
-                      if (!isOffCourse) {
-                        return (
-                          <td key={idx} className="px-3 py-3 align-top text-slate-400">
-                            —
-                          </td>
-                        );
-                      }
-                      const subjectSublabel = scope.usesStageConfig
-                        ? scope.studentSubjectLabel
-                        : sl?.planned_activity && sl.planned_activity !== 'Off-Course'
-                        ? sl.planned_activity
-                        : undefined;
-                      return (
-                        <td key={idx} className="px-3 py-3 align-top bg-teal-50/50">
-                          <div className="font-semibold text-teal-900">Off-Course</div>
-                          {subjectSublabel && (
-                            <div className="text-[11px] font-medium text-teal-800 mt-0.5 leading-snug">
-                              {subjectSublabel}
-                            </div>
-                          )}
-                          {sl && (
-                            <div className="text-[10px] font-mono tabular-nums text-teal-700/80 mt-0.5">
-                              {sl.start_time}–{sl.end_time}
-                            </div>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <StudentTimetableGrid
+            db={db}
+            studentId={scope.student.id}
+            academicYearId={activeYear.id}
+            workingDays={workingDays}
+            periodCount={periodCount}
+          />
 
           {upcomingExceptions.length > 0 && (
             <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -1185,7 +1140,7 @@ export const StudentAcademicHistoryView: React.FC = () => {
       {!enrollment ? (
         <EmptyState
           title={`No Enrollment Record in ${year?.name}`}
-          description="You were not enrolled at KKHM Islamic & Arts College during this academic year."
+          description="You were not enrolled in this college during this academic year."
         />
       ) : (
         <div className="space-y-6">
