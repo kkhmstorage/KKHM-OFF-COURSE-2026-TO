@@ -19,6 +19,9 @@ import { AcademicCalendarModule } from './components/admin/AcademicCalendarModul
 import { AdminReportsModule } from './components/admin/AdminReportsModule';
 import { AdminSettingsModule } from './components/admin/AdminSettingsModule';
 import { AuditLogsModule } from './components/admin/AuditLogsModule';
+import { OffCourseModule } from './components/admin/OffCourseModule';
+import { PasswordsModule } from './components/admin/PasswordsModule';
+import { MyOffCourseView } from './components/student/MyOffCourseView';
 
 // Mentor modules
 import {
@@ -80,8 +83,8 @@ const FirstLoginAdminCredentialModal: React.FC = () => {
       setError('Username is required.');
       return;
     }
-    if (newPassword.length < 6) {
-      setError('Please choose a permanent password of at least 6 characters.');
+    if (newPassword.length < 8) {
+      setError('Please choose a permanent password of at least 8 characters.');
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -112,7 +115,7 @@ const FirstLoginAdminCredentialModal: React.FC = () => {
       open={true}
       title="Update Temporary Admin Credentials"
       subtitle="You signed in with the temporary initial password. Set your permanent Administrator username and password now."
-      onClose={dismissAdminCredentialSetup}
+      onClose={() => undefined}
       maxWidth="md"
     >
       <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900 flex items-start gap-2.5">
@@ -146,7 +149,7 @@ const FirstLoginAdminCredentialModal: React.FC = () => {
 
         <div>
           <label className="block text-xs font-semibold text-slate-700">
-            New Password * (min 6 characters)
+            New Password * (min 8 characters)
           </label>
           <div className="mt-1 relative">
             <input
@@ -185,13 +188,6 @@ const FirstLoginAdminCredentialModal: React.FC = () => {
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-2">
-          <button
-            type="button"
-            onClick={dismissAdminCredentialSetup}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
-          >
-            Later in Settings
-          </button>
           <button
             type="submit"
             disabled={saving}
@@ -247,6 +243,10 @@ const AppRouter: React.FC = () => {
           return <MentorAssignmentsModule />;
         case 'semesters-subjects':
           return <SemestersSubjectsModule />;
+        case 'off-course':
+          return <OffCourseModule />;
+        case 'passwords':
+          return <PasswordsModule />;
         case 'timetable':
           return <TimetableModule />;
         case 'calendar':
@@ -293,6 +293,8 @@ const AppRouter: React.FC = () => {
         return <StudentDashboard />;
       case 'timetable':
         return <StudentTimetableView />;
+      case 'my-offcourse':
+        return <MyOffCourseView />;
       case 'reporting':
         return <StudentActivityReporting />;
       case 'my-reports':
