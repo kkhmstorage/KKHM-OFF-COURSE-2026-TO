@@ -104,7 +104,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             mentor: freshMentor || curr.mentor,
           };
         }
-        // If profile is temporarily absent in this snapshot, DO NOT log the user out
+        // Live database: if our own profile is not visible, the server session has
+        // expired or been revoked (password change / deactivation) -> sign out.
+        if (dataService.isProductionSupabase()) {
+          try {
+            localStorage.removeItem(SESSION_KEY);
+            sessionStorage.removeItem(SESSION_KEY);
+          } catch {
+            // Ignore
+          }
+          return null;
+        }
         return curr;
       });
     } catch (err) {
