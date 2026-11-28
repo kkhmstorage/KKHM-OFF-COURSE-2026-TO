@@ -37,6 +37,9 @@ export const AdminSettingsModule: React.FC = () => {
 
   // General
   const [institutionName, setInstitutionName] = useState('');
+  const [institutionShort, setInstitutionShort] = useState('');
+  const [institutionAddress, setInstitutionAddress] = useState('');
+  const [cicCode, setCicCode] = useState('');
   const [applicationName, setApplicationName] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [timezone, setTimezone] = useState('Asia/Kolkata');
@@ -70,6 +73,9 @@ export const AdminSettingsModule: React.FC = () => {
   useEffect(() => {
     if (!db) return;
     setInstitutionName(db.app_settings.institution_name);
+    setInstitutionShort(db.app_settings.institution_short_name || '');
+    setInstitutionAddress(db.app_settings.institution_address || '');
+    setCicCode(db.app_settings.cic_college_code || '');
     setApplicationName(db.app_settings.application_name);
     setLogoUrl(db.app_settings.logo_url || '');
     setTimezone(db.app_settings.timezone);
@@ -102,6 +108,9 @@ export const AdminSettingsModule: React.FC = () => {
     try {
       await dataService.updateAppSettings(session.profile, {
         institution_name: institutionName.trim(),
+        institution_short_name: institutionShort.trim() || null,
+        institution_address: institutionAddress.trim() || null,
+        cic_college_code: cicCode.trim() || null,
         application_name: applicationName.trim(),
         logo_url: logoUrl.trim() || undefined,
         timezone,
@@ -201,7 +210,13 @@ export const AdminSettingsModule: React.FC = () => {
   };
 
   const handleExportBackup = () => {
-    const jsonStr = dataService.exportDatabaseBackup();
+    let jsonStr: string;
+    try {
+      jsonStr = dataService.exportDatabaseBackup();
+    } catch (err) {
+      notify('error', err instanceof Error ? err.message : 'Backup failed.');
+      return;
+    }
     const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -250,9 +265,13 @@ export const AdminSettingsModule: React.FC = () => {
       confirmLabel: 'Reset Database',
       tone: 'danger',
       onConfirm: async () => {
-        dataService.resetDatabaseToDefault(session.profile);
-        await refresh();
-        notify('success', 'Database reset to initial default state.');
+        try {
+          dataService.resetDatabaseToDefault(session.profile);
+          await refresh();
+          notify('success', 'Database reset to initial default state.');
+        } catch (err) {
+          notify('error', err instanceof Error ? err.message : 'Reset failed.');
+        }
       },
     });
   };
@@ -727,6 +746,20 @@ export const AdminSettingsModule: React.FC = () => {
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             />
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700">Short Name (menu)</label>
+              <input type="text" value={institutionShort} onChange={(e) => setInstitutionShort(e.target.value)} placeholder="e.g. KKHM" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700">CIC College Code</label>
+              <input type="text" value={cicCode} onChange={(e) => setCicCode(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700">Address</label>
+              <input type="text" value={institutionAddress} onChange={(e) => setInstitutionAddress(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+            </div>
+          </div>
           <div>
             <label className="block text-xs font-semibold text-slate-700">Application Name</label>
             <input
@@ -849,7 +882,7 @@ export const AdminSettingsModule: React.FC = () => {
               type="text"
               value={credPassword}
               onChange={(e) => setCredPassword(e.target.value)}
-              placeholder="Min 6 characters"
+              placeholder="Min 8 characters"
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono focus:border-[#1E3A5F] focus:outline-none"
             />
           </div>

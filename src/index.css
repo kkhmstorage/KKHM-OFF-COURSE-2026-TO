@@ -43,3 +43,22 @@
     border: none !important;
   }
 }
+
+/* Off-Course: printable timetables and slips */
+.print-only {
+  display: none;
+}
+@media print {
+  .print-only {
+    display: block !important;
+  }
+  .timetable-sheet,
+  .password-slip {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .print-page-break {
+    break-after: page;
+    page-break-after: always;
+  }
+}

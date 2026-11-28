@@ -25,6 +25,8 @@ import {
   UserCog,
   Users,
   X,
+  Layers,
+  KeyRound,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { dataService } from '../services/dataService';
@@ -74,6 +76,8 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         { id: 'mentors', label: 'Mentors', icon: Users },
         { id: 'mentor-assignments', label: 'Mentor Assignments', icon: UserCog },
         { id: 'semesters-subjects', label: 'Semesters & Subjects', icon: BookOpen },
+        { id: 'off-course', label: 'Off-Course (CIC)', icon: Layers },
+        { id: 'passwords', label: 'Login & Passwords', icon: KeyRound },
         { id: 'timetable', label: 'Timetable', icon: FileSpreadsheet },
         { id: 'calendar', label: 'Academic Calendar', icon: Calendar },
         { id: 'reports', label: 'Reports & Analytics', icon: BarChart3 },
@@ -97,6 +101,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     return [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'timetable', label: 'Weekly Timetable', icon: FileSpreadsheet },
+      { id: 'my-offcourse', label: 'My Off-Course', icon: Layers },
       { id: 'reporting', label: 'Activity Reporting', icon: ClipboardCheck },
       { id: 'my-reports', label: 'My Reports', icon: ClipboardList },
       { id: 'academic-history', label: 'Academic History', icon: History },
@@ -136,7 +141,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           <CollegeEmblem size="sm" logoUrl={db?.app_settings.logo_url} />
           {!sidebarCollapsed && (
             <div className="min-w-0">
-              <div className="text-sm font-bold text-slate-900 truncate leading-tight">KKHM AMS</div>
+              <div className="text-sm font-bold text-slate-900 truncate leading-tight">{(db?.app_settings.institution_short_name || 'Off-Course') + ' AMS'}</div>
               <div className="text-[11px] text-slate-500 capitalize truncate">{role} Portal</div>
             </div>
           )}

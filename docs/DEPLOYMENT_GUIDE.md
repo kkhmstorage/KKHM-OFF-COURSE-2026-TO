@@ -14,6 +14,10 @@ This guide explains how to connect the application to a free **Supabase PostgreS
    - `supabase/migrations/002_rls_and_rpcs.sql` — Enables Row Level Security (RLS) on all tables and installs secure backend functions (`authenticate_user`, `admin_update_credentials`, `submit_report_unit`, `review_period_entry`).
    - `supabase/migrations/003_seed_and_rls_tests.sql` — Seeds the temporary initial Administrator login (`kkhmoffcourse` / `1111`) and the `2026-27` academic year.
    - `supabase/migrations/004_cic_student_fields.sql` — Adds all Coordination of Islamic Colleges (CIC) student and subject registration columns.
+   - `supabase/migrations/005_*.sql` and `20261123_stage_aware_timetable.sql` — duplicate subject codes, stage-aware timetables.
+   - `supabase/migrations/006_security_hardening.sql` — login lockout, hashed sessions, forced change of published passwords, tighter permissions.
+   - `supabase/migrations/007_offcourse_rules_and_password_vault.sql` — CIC Off-Course rules (Thamheediyya Urdu + pool, Aliya 3 / PG 6 credits), proposals, admin-visible encrypted passwords.
+   - Easier: run `supabase/COMPLETE_ONE_CLICK_SETUP.sql` once on a NEW project (it contains everything). See `docs/NEW_INSTITUTION_SETUP.md`.
 3. Go to **Project Settings -> API** and copy:
    - **Project URL** (`VITE_SUPABASE_URL`)
    - **anon public key** (`VITE_SUPABASE_ANON_KEY`)
@@ -51,8 +55,8 @@ This guide explains how to connect the application to a free **Supabase PostgreS
 
 1. Open your published URL.
 2. Sign in on the unified login screen using the temporary initial Administrator account:
-   - **Username**: `kkhmoffcourse`
-   - **Password**: `1111`
+   - **Username**: `kkhm`
+   - **Password**: `kkhm123.@` (public — the app forces you to change it at first sign-in)
 3. On first login with the temporary password, a secure prompt opens automatically so you can immediately set your permanent Administrator username and password (you can also update them anytime in **Settings -> Security & Credentials**).
 4. Add Mentors and Students individually or use **Students -> Bulk Add Students** (with a ready-to-download `.xlsx` Excel template). You can update or reset any user's username or password at any time from **Settings -> Security & Credentials** or from the respective user table.
 

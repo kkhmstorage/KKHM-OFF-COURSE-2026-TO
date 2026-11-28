@@ -1,3 +1,4 @@
+import { PROPOSAL_MODELS, seedPoolItems } from '../lib/offCourseCatalog';
 import { addDays, getDefaultPeriodTimings, getTodayIST, getDayOfWeekISO } from '../lib/dateUtils';
 import { SEED_PASSWORD_HASHES } from '../lib/cryptoUtils';
 import type {
@@ -786,5 +787,10 @@ export function createIsolatedSandboxSeed(): DatabaseSnapshot {
     report_review_history,
     notifications,
     audit_logs,
+    offcourse_pool_items: seedPoolItems(now),
+    offcourse_proposal_models: PROPOSAL_MODELS.map((m) => ({ ...m })),
+    offcourse_proposals: [],
+    offcourse_proposal_members: [],
+    student_offcourse_selections: [],
   };
 }

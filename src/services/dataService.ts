@@ -17,7 +17,7 @@ import {
   stripSlotFallbackMarker,
   writeLocalSemesterStage,
 } from '../lib/timetableUtils';
-import { hashPassword, SEED_PASSWORD_HASHES } from '../lib/cryptoUtils';
+import { hashPassword } from '../lib/cryptoUtils';
 import { getSupabaseClient, isSupabaseConfigured, setSupabaseSessionToken } from '../lib/supabase';
 import type {
   AcademicCalendarException,
@@ -40,6 +40,60 @@ import type {
   WorkflowMode,
 } from '../types/domain';
 import { createIsolatedSandboxSeed } from './sandboxSeed';
+import { PROPOSAL_MODELS, seedPoolItems } from '../lib/offCourseCatalog';
+import { validateProposalMembers, validateSelection, PROPOSAL_NEXT, isProposalApproved } from '../lib/offCourseRules';
+import type { SelectionDraft } from '../lib/offCourseRules';
+import type {
+  CourseType,
+  OffCourseProposal,
+  ProposalStatus,
+  StudentOffCourseSelection,
+} from '../types/domain';
+
+export interface PasswordRow {
+  profile_id: string;
+  username: string;
+  full_name: string;
+  password: string | null;
+  uses_default?: boolean;
+}
+
+/** Older demo stores (and the seed) may lack the Off-Course tables: fill them in. */
+function normalizeSnapshot(db: DatabaseSnapshot): DatabaseSnapshot {
+  const now = new Date().toISOString();
+  if (!Array.isArray(db.offcourse_pool_items) || db.offcourse_pool_items.length === 0) {
+    db.offcourse_pool_items = seedPoolItems(now);
+  }
+  if (!Array.isArray(db.offcourse_proposal_models) || db.offcourse_proposal_models.length === 0) {
+    db.offcourse_proposal_models = PROPOSAL_MODELS.map((m) => ({ ...m }));
+  }
+  if (!Array.isArray(db.offcourse_proposals)) db.offcourse_proposals = [];
+  if (!Array.isArray(db.offcourse_proposal_members)) db.offcourse_proposal_members = [];
+  if (!Array.isArray(db.student_offcourse_selections)) db.student_offcourse_selections = [];
+  return db;
+}
+
+type AnyQuery = { range: (a: number, b: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }> };
+
+/** Reads every row of a table in pages of 1000 (Supabase returns at most 1000 per request). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchAllRows<T = any>(
+  build: () => AnyQuery,
+  optional = false
+): Promise<{ data: T[]; error: { message: string } | null }> {
+  const PAGE = 1000;
+  const out: T[] = [];
+  for (let from = 0; from < 200000; from += PAGE) {
+    const { data, error } = await build().range(from, from + PAGE - 1);
+    if (error) {
+      return optional ? { data: [], error: null } : { data: out, error };
+    }
+    const rows = (data || []) as T[];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return { data: out, error: null };
+}
 
 function uid(prefix: string): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -59,6 +113,7 @@ const SANDBOX_STORAGE_KEY = 'kkhm_ams_sandbox_store_v1';
 
 class DataService {
   private sandboxDb: DatabaseSnapshot | null = null;
+  private lastSupabaseSnapshot: DatabaseSnapshot | null = null;
 
   private getSandbox(): DatabaseSnapshot {
     if (!this.sandboxDb) {
@@ -74,18 +129,9 @@ class DataService {
       }
       if (!this.sandboxDb) {
         this.sandboxDb = createIsolatedSandboxSeed();
-        this.saveSandbox();
-      } else {
-        // Automatically sync admin credentials to kkhm / kkhm123.@
-        const admin = this.sandboxDb.profiles.find((p) => p.role === 'admin');
-        if (admin && (admin.username !== 'kkhm' || admin.is_temporary_password || admin.password_sandbox !== 'kkhm123.@')) {
-          admin.username = 'kkhm';
-          admin.password_hash_sandbox = SEED_PASSWORD_HASHES.ADMIN_INITIAL;
-          admin.password_sandbox = 'kkhm123.@';
-          admin.is_temporary_password = false;
-          this.saveSandbox();
-        }
       }
+      normalizeSnapshot(this.sandboxDb);
+      this.saveSandbox();
     }
     return this.sandboxDb;
   }
@@ -109,7 +155,7 @@ class DataService {
       try {
         const sb = getSupabaseClient();
         if (!sb) {
-          return structuredClone(this.getSandbox());
+          throw new Error('Database connection is not available.');
         }
 
         const [
@@ -135,29 +181,42 @@ class DataService {
           report_review_history,
           notifications,
           audit_logs,
+          offcourse_pool_items,
+          offcourse_proposal_models,
+          offcourse_proposals,
+          offcourse_proposal_members,
+          student_offcourse_selections,
         ] = await Promise.all([
-          sb.from('profiles').select('id,role,full_name,username,email,phone,is_active,last_login_at,created_at,updated_at'),
-          sb.from('students').select('*'),
-          sb.from('mentors').select('*'),
-          sb.from('academic_years').select('*').order('start_date', { ascending: false }),
+          fetchAllRows(() => sb.from('profiles').select('id,role,full_name,username,email,phone,is_active,last_login_at,created_at,updated_at,must_change_password').order('id', { ascending: true }) as unknown as AnyQuery).then(
+            // before migration 006 the must_change_password column does not exist yet
+            (r) => (r.error ? fetchAllRows(() => sb.from('profiles').select('id,role,full_name,username,email,phone,is_active,last_login_at,created_at,updated_at').order('id', { ascending: true }) as unknown as AnyQuery) : r)
+          ),
+          fetchAllRows(() => sb.from('students').select('*').order('id', { ascending: true }) as unknown as AnyQuery),
+          fetchAllRows(() => sb.from('mentors').select('*').order('id', { ascending: true }) as unknown as AnyQuery),
+          fetchAllRows(() => sb.from('academic_years').select('*').order('start_date', { ascending: false }).order('id', { ascending: true }) as unknown as AnyQuery),
           sb.from('app_settings').select('*').eq('id', 1).maybeSingle(),
-          sb.from('academic_year_settings').select('*'),
-          sb.from('student_academic_enrollments').select('*'),
-          sb.from('mentor_assignments').select('*'),
-          sb.from('semesters').select('*').order('start_date', { ascending: true }),
-          sb.from('subjects').select('*').order('code', { ascending: true }),
-          sb.from('semester_subjects').select('*'),
-          sb.from('student_subject_selections').select('*'),
-          sb.from('timetable_templates').select('*'),
-          sb.from('timetable_slots').select('*'),
-          sb.from('student_timetable_assignments').select('*'),
-          sb.from('timetable_overrides').select('*'),
-          sb.from('academic_calendar_exceptions').select('*').order('exception_date', { ascending: false }),
-          sb.from('report_submissions').select('*').order('start_date', { ascending: false }),
-          sb.from('period_activity_entries').select('*').order('activity_date', { ascending: false }),
-          sb.from('report_review_history').select('*').order('created_at', { ascending: false }),
-          sb.from('notifications').select('*').order('created_at', { ascending: false }),
+          fetchAllRows(() => sb.from('academic_year_settings').select('*').order('id', { ascending: true }) as unknown as AnyQuery),
+          fetchAllRows(() => sb.from('student_academic_enrollments').select('*').order('id', { ascending: true }) as unknown as AnyQuery),
+          fetchAllRows(() => sb.from('mentor_assignments').select('*').order('id', { ascending: true }) as unknown as AnyQuery),
+          fetchAllRows(() => sb.from('semesters').select('*').order('start_date', { ascending: true }).order('id', { ascending: true }) as unknown as AnyQuery),
+          fetchAllRows(() => sb.from('subjects').select('*').order('code', { ascending: true }) as unknown as AnyQuery),
+          fetchAllRows(() => sb.from('semester_subjects').select('*').order('id', { ascending: true }) as unknown as AnyQuery),
+          fetchAllRows(() => sb.from('student_subject_selections').select('*').order('id', { ascending: true }) as unknown as AnyQuery),
+          fetchAllRows(() => sb.from('timetable_templates').select('*').order('id', { ascending: true }) as unknown as AnyQuery),
+          fetchAllRows(() => sb.from('timetable_slots').select('*').order('id', { ascending: true }) as unknown as AnyQuery),
+          fetchAllRows(() => sb.from('student_timetable_assignments').select('*').order('id', { ascending: true }) as unknown as AnyQuery),
+          fetchAllRows(() => sb.from('timetable_overrides').select('*').order('id', { ascending: true }) as unknown as AnyQuery),
+          fetchAllRows(() => sb.from('academic_calendar_exceptions').select('*').order('exception_date', { ascending: false }).order('id', { ascending: true }) as unknown as AnyQuery),
+          fetchAllRows(() => sb.from('report_submissions').select('*').order('start_date', { ascending: false }).order('id', { ascending: true }) as unknown as AnyQuery),
+          fetchAllRows(() => sb.from('period_activity_entries').select('*').order('activity_date', { ascending: false }).order('id', { ascending: true }) as unknown as AnyQuery),
+          fetchAllRows(() => sb.from('report_review_history').select('*').order('created_at', { ascending: false }).order('id', { ascending: true }) as unknown as AnyQuery),
+          fetchAllRows(() => sb.from('notifications').select('*').order('created_at', { ascending: false }).order('id', { ascending: true }) as unknown as AnyQuery),
           sb.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(200),
+          fetchAllRows(() => sb.from('offcourse_pool_items').select('*').order('topic', { ascending: true }).order('id', { ascending: true }) as unknown as AnyQuery, true),
+          fetchAllRows(() => sb.from('offcourse_proposal_models').select('*').order('code', { ascending: true }).order('id', { ascending: true }) as unknown as AnyQuery, true),
+          fetchAllRows(() => sb.from('offcourse_proposals').select('*').order('created_at', { ascending: false }).order('id', { ascending: true }) as unknown as AnyQuery, true),
+          fetchAllRows(() => sb.from('offcourse_proposal_members').select('*').order('proposal_id', { ascending: true }).order('student_id', { ascending: true }) as unknown as AnyQuery, true),
+          fetchAllRows(() => sb.from('student_offcourse_selections').select('*').order('created_at', { ascending: false }).order('id', { ascending: true }) as unknown as AnyQuery, true),
         ]);
 
         const err =
@@ -166,14 +225,7 @@ class DataService {
           app_settings.error ||
           report_submissions.error;
         if (err) {
-          console.warn('Supabase database error, falling back to local sandbox store:', err.message);
-          return structuredClone(this.getSandbox());
-        }
-
-        // If Supabase table is empty (e.g. before seeding complete), fallback gracefully
-        if (!academic_years.data || academic_years.data.length === 0 || !profiles.data || profiles.data.length === 0) {
-          console.warn('Supabase tables have no records, falling back to local sandbox store.');
-          return structuredClone(this.getSandbox());
+          throw new Error(`Database error: ${err.message}`);
         }
 
         const fallbackSettings: AppSettings = app_settings.data || {
@@ -202,7 +254,7 @@ class DataService {
           return { ...sem, academic_stage: stage };
         });
 
-        return {
+        const snapshot: DatabaseSnapshot = {
           profiles: (profiles.data || []) as Profile[],
           students: students.data || [],
           mentors: mentors.data || [],
@@ -225,10 +277,26 @@ class DataService {
           report_review_history: report_review_history.data || [],
           notifications: notifications.data || [],
           audit_logs: audit_logs.data || [],
+          offcourse_pool_items: (offcourse_pool_items.data || []).map((p: any) => ({ ...p, semester_nos: p.semester_nos || [] })),
+          offcourse_proposal_models: offcourse_proposal_models.data || [],
+          offcourse_proposals: (offcourse_proposals.data || []).map((p: any) => ({
+            ...p,
+            proposed_credit: Number(p.proposed_credit),
+            approved_credit: p.approved_credit == null ? null : Number(p.approved_credit),
+            exam_modes: p.exam_modes || [],
+          })),
+          offcourse_proposal_members: offcourse_proposal_members.data || [],
+          student_offcourse_selections: (student_offcourse_selections.data || []).map((x: any) => ({
+            ...x,
+            opted_out_credit: Number(x.opted_out_credit),
+          })),
         };
+        snapshot.subjects = snapshot.subjects.map((x: any) => ({ ...x, credit: Number(x.credit || 0) }));
+        this.lastSupabaseSnapshot = snapshot;
+        return snapshot;
       } catch (err) {
-        console.warn('Supabase fetch exception, falling back to local sandbox store:', err);
-        return structuredClone(this.getSandbox());
+        console.error('Supabase fetch failed:', err);
+        throw err instanceof Error ? err : new Error('Could not load data from the database.');
       }
     }
 
@@ -262,24 +330,6 @@ class DataService {
             const profile = data.profile as Profile;
             setSupabaseSessionToken(token);
 
-            // Sync authenticated profile info into local sandbox cache for fallback consistency
-            try {
-              const sandbox = this.getSandbox();
-              const matchingSandboxProf = sandbox.profiles.find(
-                (p) =>
-                  p.username.toLowerCase() === profile.username.toLowerCase() ||
-                  (p.role === profile.role && profile.role === 'admin')
-              );
-              if (matchingSandboxProf) {
-                matchingSandboxProf.id = profile.id;
-                matchingSandboxProf.username = profile.username;
-                matchingSandboxProf.email = profile.email;
-                matchingSandboxProf.full_name = profile.full_name;
-                this.saveSandbox();
-              }
-            } catch {
-              // Ignore local cache sync errors
-            }
 
             const authedClient = getSupabaseClient()!;
             const [{ data: student }, { data: mentor }] = await Promise.all([
@@ -293,13 +343,14 @@ class DataService {
               mentor: mentor || undefined,
             };
           }
-          if (error && error.message && !error.message.includes('Invalid') && !error.message.includes('password')) {
-            console.warn('Supabase authenticate_user error, checking local sandbox:', error.message);
-          }
+          if (error) throw new Error(error.message || 'Sign-in failed.');
+          if (data?.error) throw new Error(String(data.error));
+          throw new Error('Invalid username/email or password.');
         }
       } catch (err) {
-        console.warn('Supabase login exception, checking local sandbox:', err);
+        throw err instanceof Error ? err : new Error('Sign-in failed. Check your internet connection.');
       }
+      throw new Error('Database connection is not available.');
     }
 
     const db = this.getSandbox();
@@ -338,6 +389,14 @@ class DataService {
   }
 
   public logout(): void {
+    const sb = isSupabaseConfigured() ? getSupabaseClient() : null;
+    if (sb) {
+      void sb.rpc('logout_session').then(
+        () => setSupabaseSessionToken(null),
+        () => setSupabaseSessionToken(null)
+      );
+      return;
+    }
     setSupabaseSessionToken(null);
   }
 
@@ -596,8 +655,8 @@ class DataService {
     if (!payload.full_name.trim() || !payload.admission_number.trim() || !payload.username.trim()) {
       throw new Error('Full Name, Admission Number, and Username are required.');
     }
-    if (payload.password.length < 6) {
-      throw new Error('Password must be at least 6 characters.');
+    if (payload.password.length < 8) {
+      throw new Error('Password must be at least 8 characters.');
     }
 
     if (isSupabaseConfigured()) {
@@ -611,17 +670,12 @@ class DataService {
           username: payload.username.trim(),
           email: payload.email.trim(),
           phone: payload.phone?.trim() || null,
-          password_hash: payload.password,
+          password_hash: payload.password, // hashed by the database trigger (migration 006)
           is_active: payload.is_active ?? true,
         })
-        .select()
+        .select('id')
         .single();
       if (pErr) throw new Error(pErr.message);
-      await sb.rpc('admin_update_credentials', {
-        p_target_profile_id: prof.id,
-        p_new_username: payload.username.trim(),
-        p_new_password: payload.password,
-      });
       const { data: stu, error: sErr } = await sb
         .from('students')
         .insert({
@@ -801,11 +855,12 @@ class DataService {
         .eq('id', stu.profile_id);
       if (pErr) throw new Error(pErr.message);
 
-      await sb.rpc('admin_update_credentials', {
+      const { error: credErr } = await sb.rpc('admin_update_credentials', {
         p_target_profile_id: stu.profile_id,
         p_new_username: payload.username.trim(),
         p_new_password: payload.new_password?.trim() || null,
       });
+      if (credErr) throw new Error(credErr.message);
       await this.logSupabaseAudit(actor, 'STUDENT_UPDATED', 'student', studentId, {
         username: payload.username.trim(),
       });
@@ -1009,8 +1064,8 @@ class DataService {
     if (!payload.full_name.trim() || !payload.employee_code.trim() || !payload.username.trim()) {
       throw new Error('Full Name, Employee Code, and Username are required.');
     }
-    if (payload.password.length < 6) {
-      throw new Error('Password must be at least 6 characters.');
+    if (payload.password.length < 8) {
+      throw new Error('Password must be at least 8 characters.');
     }
 
     if (isSupabaseConfigured()) {
@@ -1023,17 +1078,12 @@ class DataService {
           username: payload.username.trim(),
           email: payload.email.trim(),
           phone: payload.phone?.trim() || null,
-          password_hash: payload.password,
+          password_hash: payload.password, // hashed by the database trigger (migration 006)
           is_active: payload.is_active ?? true,
         })
-        .select()
+        .select('id')
         .single();
       if (pErr) throw new Error(pErr.message);
-      await sb.rpc('admin_update_credentials', {
-        p_target_profile_id: prof.id,
-        p_new_username: payload.username.trim(),
-        p_new_password: payload.password,
-      });
       const { data: m, error: mErr } = await sb
         .from('mentors')
         .insert({
@@ -1138,11 +1188,12 @@ class DataService {
           is_active: payload.is_active,
         })
         .eq('id', m.profile_id);
-      await sb.rpc('admin_update_credentials', {
+      const { error: credErr } = await sb.rpc('admin_update_credentials', {
         p_target_profile_id: m.profile_id,
         p_new_username: payload.username.trim(),
         p_new_password: payload.new_password?.trim() || null,
       });
+      if (credErr) throw new Error(credErr.message);
       await this.logSupabaseAudit(actor, 'MENTOR_UPDATED', 'mentor', mentorId, {
         username: payload.username.trim(),
       });
@@ -1243,8 +1294,8 @@ class DataService {
   ): Promise<void> {
     this.assertAdmin(actor);
     if (!newUsername.trim()) throw new Error('Username is required.');
-    if (newPassword && newPassword.trim().length > 0 && newPassword.trim().length < 6) {
-      throw new Error('New password must be at least 6 characters.');
+    if (newPassword && newPassword.trim().length > 0 && newPassword.trim().length < 8) {
+      throw new Error('New password must be at least 8 characters.');
     }
 
     if (isSupabaseConfigured()) {
@@ -2601,12 +2652,19 @@ class DataService {
   }
 
   public exportDatabaseBackup(): string {
+    if (isSupabaseConfigured()) {
+      if (!this.lastSupabaseSnapshot) throw new Error('Data not loaded yet. Refresh and try again.');
+      return JSON.stringify(this.lastSupabaseSnapshot, null, 2);
+    }
     const db = this.getSandbox();
     return JSON.stringify(db, null, 2);
   }
 
   public importDatabaseBackup(actor: Profile, backupJson: string): void {
     this.assertAdmin(actor);
+    if (isSupabaseConfigured()) {
+      throw new Error('Restore works only in demo mode. For the live database use Supabase Dashboard → Database → Backups.');
+    }
     let parsed: DatabaseSnapshot;
     try {
       parsed = JSON.parse(backupJson) as DatabaseSnapshot;
@@ -2634,6 +2692,9 @@ class DataService {
 
   public resetDatabaseToDefault(actor: Profile): void {
     this.assertAdmin(actor);
+    if (isSupabaseConfigured()) {
+      throw new Error('Reset is disabled for the live database.');
+    }
     this.sandboxDb = createIsolatedSandboxSeed();
     this.saveSandbox();
     this.appendSandboxAudit(actor, 'DATABASE_RESET', 'app_settings', '1', {
@@ -2657,6 +2718,392 @@ class DataService {
         n.is_read = true;
       }
     });
+  }
+
+  // ============================================================================
+  // CIC Off-Course: course chart, opt-outs, proposals, pool, passwords
+  // The live database re-checks every rule (migration 007); the demo store uses
+  // the same checks from lib/offCourseRules.ts.
+  // ============================================================================
+
+  private demoOnly<T>(fn: (db: DatabaseSnapshot) => T): T {
+    const db = this.getSandbox();
+    const out = fn(db);
+    this.saveSandbox();
+    return out;
+  }
+
+  public async updateSubjectCourseChart(
+    actor: Profile,
+    subjectId: string,
+    fields: {
+      academic_stage: AcademicStage | null;
+      semester_no: number | null;
+      course_type: CourseType;
+      is_urdu: boolean;
+      credit: number;
+      scheme?: string | null;
+    }
+  ): Promise<void> {
+    this.assertAdmin(actor);
+    if (fields.credit < 0 || fields.credit > 20) throw new Error('ക്രെഡിറ്റ് 0 മുതൽ 20 വരെ.');
+    if (isSupabaseConfigured()) {
+      const { error } = await getSupabaseClient()!.from('subjects').update(fields).eq('id', subjectId);
+      if (error) throw new Error(error.message);
+      await this.logSupabaseAudit(actor, 'COURSE_CHART_UPDATED', 'subject', subjectId, fields);
+      return;
+    }
+    this.demoOnly((db) => {
+      const sub = db.subjects.find((x) => x.id === subjectId);
+      if (!sub) throw new Error('Subject not found.');
+      Object.assign(sub, fields);
+      this.appendSandboxAudit(actor, 'COURSE_CHART_UPDATED', 'subject', subjectId, fields);
+    });
+  }
+
+  public async createCourseSubject(
+    actor: Profile,
+    payload: {
+      code: string;
+      name: string;
+      academic_stage: AcademicStage;
+      semester_no: number;
+      course_type: CourseType;
+      is_urdu: boolean;
+      credit: number;
+      scheme?: string | null;
+    }
+  ): Promise<void> {
+    this.assertAdmin(actor);
+    const row = {
+      ...payload,
+      code: payload.code.trim().toUpperCase(),
+      name: payload.name.trim(),
+      category: payload.course_type,
+      is_active: true,
+    };
+    if (!row.code || !row.name) throw new Error('കോഡും പേരും നൽകുക.');
+    if (isSupabaseConfigured()) {
+      const { error } = await getSupabaseClient()!.from('subjects').insert(row);
+      if (error) throw new Error(error.message);
+      await this.logSupabaseAudit(actor, 'COURSE_SUBJECT_CREATED', 'subject', row.code, row);
+      return;
+    }
+    this.demoOnly((db) => {
+      db.subjects.push({ ...row, id: uid('sub'), created_at: new Date().toISOString() });
+      this.appendSandboxAudit(actor, 'COURSE_SUBJECT_CREATED', 'subject', row.code, row);
+    });
+  }
+
+  public async updateStudentStage(
+    actor: Profile,
+    studentId: string,
+    stage: AcademicStage | null,
+    semesterNo: number | null,
+    scheme: string | null
+  ): Promise<void> {
+    this.assertAdmin(actor);
+    const fields = { academic_stage: stage, stage_semester_no: semesterNo, scheme };
+    if (isSupabaseConfigured()) {
+      const { error } = await getSupabaseClient()!.from('students').update(fields).eq('id', studentId);
+      if (error) throw new Error(error.message);
+      return;
+    }
+    this.demoOnly((db) => {
+      const st = db.students.find((x) => x.id === studentId);
+      if (st) Object.assign(st, fields);
+    });
+  }
+
+  public async saveOffCourseSelection(
+    actor: Profile,
+    draft: SelectionDraft & { academic_year_id: string; semester_period?: 'Nov' | 'May' | null }
+  ): Promise<void> {
+    this.assertAdmin(actor);
+    const row = {
+      student_id: draft.student_id,
+      academic_year_id: draft.academic_year_id,
+      academic_stage: draft.academic_stage,
+      semester_no: draft.semester_no,
+      semester_period: draft.semester_period || null,
+      opted_out_subject_id: draft.opted_out_subject_id,
+      replacement_type: draft.replacement_type,
+      pool_item_id: draft.replacement_type === 'pool' ? draft.pool_item_id || null : null,
+      proposal_id: draft.replacement_type === 'off_course' ? draft.proposal_id || null : null,
+      interdisciplinary_subject_id:
+        draft.replacement_type === 'interdisciplinary' ? draft.interdisciplinary_subject_id || null : null,
+      notes: draft.notes?.trim() || null,
+    };
+    if (isSupabaseConfigured()) {
+      const sb = getSupabaseClient()!;
+      const q = draft.id
+        ? sb.from('student_offcourse_selections').update(row).eq('id', draft.id)
+        : sb.from('student_offcourse_selections').insert({ ...row, created_by: actor.id });
+      const { error } = await q;
+      if (error) throw new Error(error.message);
+      await this.logSupabaseAudit(actor, draft.id ? 'OFFCOURSE_SELECTION_UPDATED' : 'OFFCOURSE_SELECTION_CREATED',
+        'student', draft.student_id, row);
+      return;
+    }
+    this.demoOnly((db) => {
+      const errors = validateSelection(db, draft);
+      if (errors.length) throw new Error(errors.join(' '));
+      const credit = Number(db.subjects.find((x) => x.id === row.opted_out_subject_id)?.credit || 0);
+      const now = new Date().toISOString();
+      if (draft.id) {
+        const ex = db.student_offcourse_selections.find((x) => x.id === draft.id);
+        if (!ex) throw new Error('Record not found.');
+        Object.assign(ex, row, { opted_out_credit: credit, updated_at: now });
+      } else {
+        db.student_offcourse_selections.push({
+          ...row,
+          id: uid('ocs'),
+          opted_out_credit: credit,
+          status: 'active',
+          created_by: actor.id,
+          created_at: now,
+          updated_at: now,
+        } as StudentOffCourseSelection);
+      }
+      this.appendSandboxAudit(actor, 'OFFCOURSE_SELECTION_SAVED', 'student', draft.student_id, row);
+    });
+  }
+
+  public async setOffCourseSelectionStatus(
+    actor: Profile,
+    selectionId: string,
+    status: StudentOffCourseSelection['status']
+  ): Promise<void> {
+    this.assertAdmin(actor);
+    if (isSupabaseConfigured()) {
+      const { error } = await getSupabaseClient()!
+        .from('student_offcourse_selections').update({ status }).eq('id', selectionId);
+      if (error) throw new Error(error.message);
+      await this.logSupabaseAudit(actor, 'OFFCOURSE_SELECTION_STATUS', 'selection', selectionId, { status });
+      return;
+    }
+    this.demoOnly((db) => {
+      const ex = db.student_offcourse_selections.find((x) => x.id === selectionId);
+      if (!ex) throw new Error('Record not found.');
+      if (status !== 'cancelled' && ex.status === 'cancelled') {
+        const errors = validateSelection(db, { ...ex, id: ex.id });
+        if (errors.length) throw new Error(errors.join(' '));
+      }
+      ex.status = status;
+      ex.updated_at = new Date().toISOString();
+    });
+  }
+
+  public async saveProposal(
+    actor: Profile,
+    payload: Omit<OffCourseProposal, 'id' | 'status' | 'created_at' | 'updated_at' | 'exam_modes' |
+      'principal_approved_at' | 'submitted_at' | 'cic_decided_at' | 'approved_credit' | 'created_by'> & {
+      id?: string;
+      exam_modes?: string[];
+      approved_credit?: number | null;
+    },
+    memberIds: string[]
+  ): Promise<string> {
+    this.assertAdmin(actor);
+    const row = {
+      academic_year_id: payload.academic_year_id,
+      proposal_type: payload.proposal_type,
+      academic_stage: payload.academic_stage,
+      semester_period: payload.semester_period || null,
+      topic: payload.topic.trim(),
+      model_code: payload.model_code || null,
+      proposed_credit: Number(payload.proposed_credit),
+      guide_mentor_id: payload.guide_mentor_id || null,
+      guide_name: payload.guide_name?.trim() || null,
+      guide_phone: payload.guide_phone?.trim() || null,
+      guide_email: payload.guide_email?.trim() || null,
+      exam_language: payload.exam_language?.trim() || null,
+      exam_modes: payload.exam_modes || [],
+      application_no: payload.application_no?.trim() || null,
+      remarks: payload.remarks?.trim() || null,
+      work_submission_due: payload.work_submission_due || null,
+      ...(payload.approved_credit != null ? { approved_credit: Number(payload.approved_credit) } : {}),
+    };
+    if (row.topic.length < 3) throw new Error('വിഷയത്തിന്റെ പേര് നൽകുക.');
+    if (!(row.proposed_credit > 0)) throw new Error('നിർദ്ദേശിക്കുന്ന ക്രെഡിറ്റ് നൽകുക.');
+    const pseudo = { id: payload.id || '', proposal_type: row.proposal_type, academic_stage: row.academic_stage, topic: row.topic };
+
+    if (isSupabaseConfigured()) {
+      const sb = getSupabaseClient()!;
+      let id = payload.id;
+      if (id) {
+        const { error } = await sb.from('offcourse_proposals').update(row).eq('id', id);
+        if (error) throw new Error(error.message);
+      } else {
+        const { data, error } = await sb
+          .from('offcourse_proposals').insert({ ...row, created_by: actor.id }).select('id').single();
+        if (error) throw new Error(error.message);
+        id = data.id as string;
+      }
+      const { data: current, error: mErr } = await sb
+        .from('offcourse_proposal_members').select('student_id').eq('proposal_id', id);
+      if (mErr) throw new Error(mErr.message);
+      const have = new Set((current || []).map((m: { student_id: string }) => m.student_id));
+      const removed = [...have].filter((x) => !memberIds.includes(x));
+      if (removed.length) {
+        const { error } = await sb.from('offcourse_proposal_members').delete()
+          .eq('proposal_id', id).in('student_id', removed);
+        if (error) throw new Error(error.message);
+      }
+      for (const [i, sid] of memberIds.entries()) {
+        if (have.has(sid)) continue;
+        const { error } = await sb.from('offcourse_proposal_members')
+          .insert({ proposal_id: id, student_id: sid, is_leader: i === 0 });
+        if (error) throw new Error(error.message);
+      }
+      await this.logSupabaseAudit(actor, payload.id ? 'PROPOSAL_UPDATED' : 'PROPOSAL_CREATED', 'proposal', id, {
+        topic: row.topic, members: memberIds.length,
+      });
+      return id!;
+    }
+
+    return this.demoOnly((db) => {
+      const errors = validateProposalMembers(db, pseudo, memberIds);
+      if (errors.length) throw new Error(errors.join(' '));
+      const now = new Date().toISOString();
+      let id = payload.id;
+      if (id) {
+        const ex = db.offcourse_proposals.find((x) => x.id === id);
+        if (!ex) throw new Error('Proposal not found.');
+        Object.assign(ex, row, { updated_at: now });
+      } else {
+        id = uid('prop');
+        db.offcourse_proposals.push({
+          ...row, id, status: 'draft', created_by: actor.id, created_at: now, updated_at: now,
+        } as OffCourseProposal);
+      }
+      db.offcourse_proposal_members = db.offcourse_proposal_members.filter((m) => m.proposal_id !== id);
+      memberIds.forEach((sid, i) =>
+        db.offcourse_proposal_members.push({ proposal_id: id!, student_id: sid, is_leader: i === 0, created_at: now })
+      );
+      this.appendSandboxAudit(actor, 'PROPOSAL_SAVED', 'proposal', id, { topic: row.topic });
+      return id;
+    });
+  }
+
+  public async setProposalStatus(
+    actor: Profile,
+    proposalId: string,
+    status: ProposalStatus,
+    extra: { approved_credit?: number | null; remarks?: string | null; application_no?: string | null } = {}
+  ): Promise<void> {
+    this.assertAdmin(actor);
+    const patch: Record<string, unknown> = { status };
+    if (extra.approved_credit != null) patch.approved_credit = Number(extra.approved_credit);
+    if (extra.remarks != null) patch.remarks = extra.remarks;
+    if (extra.application_no != null) patch.application_no = extra.application_no;
+    if (isProposalApproved(status) && !(Number(extra.approved_credit) > 0)) {
+      const existing = this.lastSupabaseSnapshot?.offcourse_proposals.find((p) => p.id === proposalId)?.approved_credit;
+      if (!isSupabaseConfigured() || !(Number(existing) > 0)) {
+        // the database repeats this check; message here is friendlier
+        if (!(Number(extra.approved_credit) > 0)) throw new Error('CIC അംഗീകരിച്ച ക്രെഡിറ്റ് നൽകുക.');
+      }
+    }
+    if (isSupabaseConfigured()) {
+      const { error } = await getSupabaseClient()!.from('offcourse_proposals').update(patch).eq('id', proposalId);
+      if (error) throw new Error(error.message);
+      await this.logSupabaseAudit(actor, 'PROPOSAL_STATUS', 'proposal', proposalId, patch);
+      return;
+    }
+    this.demoOnly((db) => {
+      const p = db.offcourse_proposals.find((x) => x.id === proposalId);
+      if (!p) throw new Error('Proposal not found.');
+      if (!PROPOSAL_NEXT[p.status].includes(status)) {
+        throw new Error(`ഈ ഘട്ടത്തിൽ നിന്ന് (${p.status}) ${status} ആക്കാനാവില്ല.`);
+      }
+      const now = new Date().toISOString();
+      Object.assign(p, patch, { updated_at: now });
+      if (status === 'principal_approved') p.principal_approved_at = now;
+      if (status === 'submitted_to_cic') p.submitted_at = now;
+      if (isProposalApproved(status) || status === 'rewrite' || status === 'rejected') p.cic_decided_at = p.cic_decided_at || now;
+    });
+  }
+
+  public async deleteProposal(actor: Profile, proposalId: string): Promise<void> {
+    this.assertAdmin(actor);
+    if (isSupabaseConfigured()) {
+      const { error } = await getSupabaseClient()!.from('offcourse_proposals').delete().eq('id', proposalId);
+      if (error) throw new Error(error.message);
+      await this.logSupabaseAudit(actor, 'PROPOSAL_DELETED', 'proposal', proposalId, {});
+      return;
+    }
+    this.demoOnly((db) => {
+      db.offcourse_proposals = db.offcourse_proposals.filter((p) => p.id !== proposalId);
+      db.offcourse_proposal_members = db.offcourse_proposal_members.filter((m) => m.proposal_id !== proposalId);
+      db.student_offcourse_selections.forEach((s) => {
+        if (s.proposal_id === proposalId) s.proposal_id = null;
+      });
+    });
+  }
+
+  public async setPoolItemActive(actor: Profile, poolItemId: string, isActive: boolean): Promise<void> {
+    this.assertAdmin(actor);
+    if (isSupabaseConfigured()) {
+      const { error } = await getSupabaseClient()!
+        .from('offcourse_pool_items').update({ is_active: isActive }).eq('id', poolItemId);
+      if (error) throw new Error(error.message);
+      return;
+    }
+    this.demoOnly((db) => {
+      const p = db.offcourse_pool_items.find((x) => x.id === poolItemId);
+      if (p) p.is_active = isActive;
+    });
+  }
+
+  /** Admin: current password of a student/mentor (every view is logged). */
+  public async viewPassword(actor: Profile, profileId: string): Promise<string | null> {
+    this.assertAdmin(actor);
+    if (isSupabaseConfigured()) {
+      const { data, error } = await getSupabaseClient()!.rpc('admin_view_password', { p_profile_id: profileId });
+      if (error) throw new Error(error.message);
+      return (data as string | null) ?? null;
+    }
+    const db = this.getSandbox();
+    const p = db.profiles.find((x) => x.id === profileId);
+    if (!p || p.role === 'admin') throw new Error('Not available.');
+    return p.password_sandbox || null;
+  }
+
+  public async listPasswords(actor: Profile, profileIds: string[]): Promise<PasswordRow[]> {
+    this.assertAdmin(actor);
+    if (isSupabaseConfigured()) {
+      const { data, error } = await getSupabaseClient()!.rpc('admin_list_passwords', { p_profile_ids: profileIds });
+      if (error) throw new Error(error.message);
+      return (data || []) as PasswordRow[];
+    }
+    const db = this.getSandbox();
+    return db.profiles
+      .filter((p) => profileIds.includes(p.id) && p.role !== 'admin')
+      .map((p) => ({ profile_id: p.id, username: p.username, full_name: p.full_name, password: p.password_sandbox || null }));
+  }
+
+  public async resetPasswords(actor: Profile, profileIds: string[]): Promise<PasswordRow[]> {
+    this.assertAdmin(actor);
+    if (isSupabaseConfigured()) {
+      const { data, error } = await getSupabaseClient()!.rpc('admin_reset_passwords', { p_profile_ids: profileIds });
+      if (error) throw new Error(error.message);
+      return (data || []) as PasswordRow[];
+    }
+    const letters = 'abcdefghjkmnpqrstuvwxyz';
+    const digits = '23456789';
+    const pick = (set: string) => set[Math.floor(Math.random() * set.length)];
+    const db = this.getSandbox();
+    const out: PasswordRow[] = [];
+    for (const p of db.profiles) {
+      if (!profileIds.includes(p.id) || p.role === 'admin') continue;
+      const pwd = pick(letters).toUpperCase() + pick(letters) + pick(letters) + pick(letters) +
+        pick(digits) + pick(digits) + pick(digits) + pick(digits);
+      p.password_sandbox = pwd;
+      p.password_hash_sandbox = await hashPassword(pwd);
+      out.push({ profile_id: p.id, username: p.username, full_name: p.full_name, password: pwd });
+    }
+    this.saveSandbox();
+    return out;
   }
 }
 

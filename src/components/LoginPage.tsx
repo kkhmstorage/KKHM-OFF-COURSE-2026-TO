@@ -198,7 +198,7 @@ export const LoginPage: React.FC = () => {
           College Office.
         </p>
         <p className="mt-3 text-sm text-slate-600 leading-relaxed">
-          Please contact the <strong>KKHM Academic Office</strong> to recover your username or issue
+          Please contact the <strong>{institutionName} academic office</strong> to recover your username or issue
           a new password.
         </p>
         <div className="mt-5 flex justify-end">

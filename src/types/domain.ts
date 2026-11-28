@@ -45,6 +45,8 @@ export interface Profile {
   password_hash_sandbox?: string;
   /** Flags temporary first-login setup */
   is_temporary_password?: boolean;
+  /** still on a password published in the repo (set by migration 006) */
+  must_change_password?: boolean;
   is_active: boolean;
   last_login_at?: string;
   created_at: string;
@@ -94,6 +96,10 @@ export interface Student {
   reference_notes?: string;
   guardian_phone?: string;
   notes?: string;
+  /** Current position in the 8-year programme (migration 007) */
+  academic_stage?: AcademicStage | null;
+  stage_semester_no?: number | null;
+  scheme?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -136,6 +142,9 @@ export interface AppSettings {
   in_app_notifications_enabled: boolean;
   reminder_hour: number;
   session_timeout_hours: number;
+  institution_short_name?: string | null;
+  institution_address?: string | null;
+  cic_college_code?: string | null;
   updated_at: string;
 }
 
@@ -183,6 +192,8 @@ export interface Semester {
   created_at: string;
 }
 
+export type CourseType = 'core' | 'elective' | 'interdisciplinary' | 'off_course';
+
 export interface Subject {
   id: string;
   code: string;
@@ -190,6 +201,120 @@ export interface Subject {
   category: string;
   is_active: boolean;
   created_at: string;
+  /** Course chart (migration 007): which stage / semester the syllabus places it in */
+  academic_stage?: AcademicStage | null;
+  semester_no?: number | null;
+  course_type?: CourseType;
+  is_urdu?: boolean;
+  credit?: number;
+  scheme?: string | null;
+}
+
+/** Thamheediyya Off-Course Pool part (CIC Board of Studies) */
+export interface OffCoursePoolItem {
+  id: string;
+  pool_year: string;
+  course_name: string;
+  topic: string;
+  semester_nos: number[];
+  exam_mode?: string | null;
+  mark?: string | null;
+  exam_language?: string | null;
+  note?: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface OffCourseProposalModel {
+  code: string;
+  title: string;
+  exam_mode?: string | null;
+  mark?: string | null;
+  max_credit?: number | null;
+  is_active: boolean;
+}
+
+export type ProposalStatus =
+  | 'draft'
+  | 'principal_approved'
+  | 'submitted_to_cic'
+  | 'approved'
+  | 'approved_with_changes'
+  | 'approved_conditional'
+  | 'rewrite'
+  | 'rejected'
+  | 'withdrawn';
+
+export const EXAM_MODES = [
+  'Written',
+  'Practical',
+  'Project Submission',
+  'Viva',
+  'Field Work',
+  'Certificate Submission',
+  'Report Submission',
+  'Study Note Submission',
+  'Assignment',
+  'Translation',
+  'Seminar',
+  'Book Submission',
+] as const;
+
+export interface OffCourseProposal {
+  id: string;
+  academic_year_id: string;
+  proposal_type: 'individual' | 'group';
+  academic_stage: 'aliya' | 'pg';
+  semester_period?: 'Nov' | 'May' | null;
+  topic: string;
+  model_code?: string | null;
+  proposed_credit: number;
+  guide_mentor_id?: string | null;
+  guide_name?: string | null;
+  guide_phone?: string | null;
+  guide_email?: string | null;
+  status: ProposalStatus;
+  principal_approved_at?: string | null;
+  submitted_at?: string | null;
+  cic_decided_at?: string | null;
+  approved_credit?: number | null;
+  exam_language?: string | null;
+  exam_modes: string[];
+  application_no?: string | null;
+  remarks?: string | null;
+  work_submission_due?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OffCourseProposalMember {
+  proposal_id: string;
+  student_id: string;
+  is_leader: boolean;
+  created_at: string;
+}
+
+export type OffCourseReplacementType = 'pool' | 'off_course' | 'interdisciplinary';
+
+export interface StudentOffCourseSelection {
+  id: string;
+  student_id: string;
+  academic_year_id: string;
+  academic_stage: AcademicStage;
+  semester_no: number;
+  semester_period?: 'Nov' | 'May' | null;
+  opted_out_subject_id: string;
+  opted_out_credit: number;
+  replacement_type: OffCourseReplacementType;
+  pool_item_id?: string | null;
+  proposal_id?: string | null;
+  interdisciplinary_subject_id?: string | null;
+  status: 'active' | 'completed' | 'cancelled';
+  notes?: string | null;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface SemesterSubject {
@@ -369,6 +494,11 @@ export interface DatabaseSnapshot {
   report_review_history: ReportReviewHistory[];
   notifications: NotificationItem[];
   audit_logs: AuditLog[];
+  offcourse_pool_items: OffCoursePoolItem[];
+  offcourse_proposal_models: OffCourseProposalModel[];
+  offcourse_proposals: OffCourseProposal[];
+  offcourse_proposal_members: OffCourseProposalMember[];
+  student_offcourse_selections: StudentOffCourseSelection[];
 }
 
 export interface AuthSession {
