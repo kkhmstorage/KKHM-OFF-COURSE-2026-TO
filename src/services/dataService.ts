@@ -2795,6 +2795,82 @@ class DataService {
     });
   }
 
+  /**
+   * Find a subject by code + name (case-insensitive) or create it, and return its id.
+   * mode 'opt_out': the subject's course-chart fields are set to the given stage/semester/type/credit,
+   *                 because the off-course rules (credit cap, Urdu-only) read them.
+   * mode 'reference': an existing subject is used as it is (e.g. another department's
+   *                 interdisciplinary course); a new one is created without stage/semester.
+   */
+  public async ensureCourseSubject(
+    actor: Profile,
+    p: {
+      code: string;
+      name: string;
+      mode: 'opt_out' | 'reference';
+      academic_stage?: AcademicStage | null;
+      semester_no?: number | null;
+      course_type: CourseType;
+      is_urdu?: boolean;
+      credit?: number;
+    }
+  ): Promise<string> {
+    this.assertAdmin(actor);
+    const code = p.code.trim().toUpperCase();
+    const name = p.name.trim();
+    if (!code || !name) throw new Error('വിഷയത്തിന്റെ കോഡും പേരും നൽകുക.');
+    const credit = Number(p.credit || 0);
+    if (credit < 0 || credit > 20) throw new Error('ക്രെഡിറ്റ് 0 മുതൽ 20 വരെ.');
+    const chart = {
+      academic_stage: p.academic_stage ?? null,
+      semester_no: p.semester_no ?? null,
+      course_type: p.course_type,
+      is_urdu: Boolean(p.is_urdu),
+      credit,
+    };
+    const same = (s: { code: string; name: string }) =>
+      s.code.trim().toUpperCase() === code && s.name.trim().toLowerCase() === name.toLowerCase();
+
+    if (isSupabaseConfigured()) {
+      const sb = getSupabaseClient()!;
+      const { data: found, error: findErr } = await sb.from('subjects').select('id, code, name').ilike('code', code);
+      if (findErr) throw new Error(findErr.message);
+      const hit = (found || []).find(same);
+      if (hit) {
+        if (p.mode === 'opt_out') {
+          const { error } = await sb.from('subjects').update(chart).eq('id', hit.id);
+          if (error) throw new Error(error.message);
+          await this.logSupabaseAudit(actor, 'COURSE_CHART_UPDATED', 'subject', hit.id, chart);
+        }
+        return hit.id as string;
+      }
+      const row = { code, name, category: p.course_type, is_active: true, ...(p.mode === 'opt_out' ? chart : { course_type: p.course_type, credit }) };
+      const { data, error } = await sb.from('subjects').insert(row).select('id').single();
+      if (error) throw new Error(error.message);
+      await this.logSupabaseAudit(actor, 'COURSE_SUBJECT_CREATED', 'subject', code, row);
+      return data.id as string;
+    }
+    return this.demoOnly((db) => {
+      const hit = db.subjects.find(same);
+      if (hit) {
+        if (p.mode === 'opt_out') Object.assign(hit, chart);
+        return hit.id;
+      }
+      const id = uid('sub');
+      db.subjects.push({
+        id,
+        code,
+        name,
+        category: p.course_type,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        ...(p.mode === 'opt_out' ? chart : { course_type: p.course_type, credit }),
+      });
+      this.appendSandboxAudit(actor, 'COURSE_SUBJECT_CREATED', 'subject', code, { code, name });
+      return id;
+    });
+  }
+
   public async updateStudentStage(
     actor: Profile,
     studentId: string,
