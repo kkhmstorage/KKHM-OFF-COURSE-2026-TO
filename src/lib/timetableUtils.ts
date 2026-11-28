@@ -5,6 +5,7 @@ import type {
   Semester,
   Student,
   StudentAcademicEnrollment,
+  StudentOffCourseSelection,
   TimetableSlot,
   TimetableTemplate,
 } from '../types/domain';
@@ -320,6 +321,8 @@ export interface ResolvedStudentTimetableContext {
   stage: AcademicStage;
   usesStageConfig: boolean;
   studentSubjectLabel: string;
+  /** slot id -> what this student studies in that period instead of the opted-out subject */
+  slotReplacementLabels: Record<string, string>;
 }
 
 /**
@@ -390,13 +393,41 @@ export function resolveStudentTimetableContext(
       ? yearSemesters.find((s) => s.id === template.semester_id)
       : undefined) || matchedSemester;
 
-  const templateSlots = template
+  const rawTemplateSlots = template
     ? db.timetable_slots.filter((s) => s.template_id === template.id)
     : [];
 
+  // Per-student substitution: a class period of a subject this student has opted
+  // out of becomes an Off-Course period showing the student's replacement subject.
+  const selections = (db.student_offcourse_selections || []).filter(
+    (sel) =>
+      sel.student_id === studentId &&
+      sel.status !== 'cancelled' &&
+      sel.academic_year_id === academicYearId &&
+      (!student?.stage_semester_no || sel.semester_no === student.stage_semester_no)
+  );
+  const replacementBySubject = new Map<string, string>();
+  for (const sel of selections) {
+    replacementBySubject.set(sel.opted_out_subject_id, describeReplacement(db, sel));
+  }
+  const slotReplacementLabels: Record<string, string> = {};
+  const templateSlots = rawTemplateSlots.map((sl) => {
+    const label = sl.subject_id ? replacementBySubject.get(sl.subject_id) : undefined;
+    if (!label) return sl;
+    slotReplacementLabels[sl.id] = label;
+    const ids = Array.isArray(sl.off_course_student_ids) ? sl.off_course_student_ids : [];
+    return {
+      ...sl,
+      is_off_course: true,
+      off_course_student_ids: ids.length && !ids.includes(studentId) ? [...ids, studentId] : ids.length ? ids : [studentId],
+    };
+  });
+
   const stage = inferSemesterStage(linkedSemester, template);
   const usesStageConfig = templateUsesStageOffCourseConfig(templateSlots);
-  const studentSubjectLabel = formatStudentSubjects(db, studentId, academicYearId);
+  const studentSubjectLabel = selections.length
+    ? [...new Set(selections.map((sel) => describeReplacement(db, sel)))].join(', ')
+    : formatStudentSubjects(db, studentId, academicYearId);
 
   return {
     student,
@@ -406,7 +437,18 @@ export function resolveStudentTimetableContext(
     stage,
     usesStageConfig,
     studentSubjectLabel,
+    slotReplacementLabels,
   };
+}
+
+function describeReplacement(db: DatabaseSnapshot, sel: StudentOffCourseSelection): string {
+  if (sel.replacement_type === 'pool') {
+    return (db.offcourse_pool_items || []).find((p) => p.id === sel.pool_item_id)?.topic || 'Off-Course Pool';
+  }
+  if (sel.replacement_type === 'off_course') {
+    return (db.offcourse_proposals || []).find((p) => p.id === sel.proposal_id)?.topic || 'Off Course';
+  }
+  return db.subjects.find((x) => x.id === sel.interdisciplinary_subject_id)?.name || 'Interdisciplinary';
 }
 
 export interface ClassStudentOption {

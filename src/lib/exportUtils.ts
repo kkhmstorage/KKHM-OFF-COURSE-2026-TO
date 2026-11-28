@@ -272,7 +272,7 @@ export function downloadStudentExcelTemplate(defaultBatch = 'Degree 1st Year (Fo
     ['Whatsapp Number', 'Optional', 'WhatsApp contact number.'],
     ['Reference', 'Optional', 'Prescribed text, reference literature or study materials.'],
     ['Username *', 'Optional', 'Login username. If left blank, automatically generated from Clg Ad No.'],
-    ['Password *', 'Optional', 'Initial password (min 6 chars). If blank, defaults to Student@2026.'],
+    ['Password *', 'Required', 'Initial password (min 8 chars, required, different for every student).'],
     [''],
     ['Instructions:'],
     ['1. Fill student records in the "Students" sheet using the template columns.'],
